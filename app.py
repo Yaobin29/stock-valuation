@@ -39,4 +39,5 @@ np.random.seed(0)
 price_trend = np.random.normal(current_price, 2, size=30)
 
 st.subheader("近30天股价走势（示例数据）")
-st.line_chart(price_tr
+st.line_chart(price_trend)
+
