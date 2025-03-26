@@ -140,7 +140,7 @@ if not peer_df.empty:
     st.pyplot(fig)
 
 # 显示6个月价格走势
-st.subheader("\U0001F4C6 6 个月股价走势")
-hist = stock.history(period="6mo")
+st.subheader("\U0001F4C6 12 个月股价走势")
+hist = stock.history(period="12mo")
 if not hist.empty:
     st.line_chart(hist["Close"])
