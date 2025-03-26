@@ -117,47 +117,17 @@ final_judge = "低估" if final_score < 0.5 else "高估"
 st.markdown(f"### 🧮 综合估值判断（50%模型 + 50%行业）：{final_judge}")
 
 # 股票近6个月价格走势
-st.markdown("### 📈 股票近6个月价格走势 (matplotlib)")
+st.markdown("### 📈 股票近6个月价格走势")
 try:
     hist = yf.download(code, period="6mo", interval="1d", progress=False)
     if hist.empty or "Close" not in hist.columns:
         raise ValueError("无有效价格数据")
-    
     price_data = hist["Close"].dropna()
-    price_df = pd.DataFrame({"Date": price_data.index, "ClosePrice": price_data.values})
-    
-    fig2, ax2 = plt.subplots(figsize=(7, 4))
-    ax2.plot(price_df["Date"], price_df["ClosePrice"], linewidth=2)
-    ax2.set_title("Close Price (Last 6 Months)")
-    ax2.set_xlabel("Date")
-    ax2.set_ylabel("Price")
-    fig2.autofmt_xdate()  # 自动旋转日期刻度
-    st.pyplot(fig2)
-
+    price_df = pd.DataFrame({"日期": price_data.index, "收盘价": price_data.values}).set_index("日期")
+    st.line_chart(price_df)
 except:
     st.warning("⚠️ 无法获取历史价格数据。可能该股票无日度数据或接口异常。")
 
 
 
-# 财务指标雷达图
-st.markdown("### 📊 财务指标雷达图")
 
-radar_labels = ["PE", "PB", "ROE", "EPS", "Revenue Growth", "Gross Margin", "Free Cashflow"]
-radar_values = [pe, pb, roe, eps, revenue_growth, gross_margin, free_cashflow]
-clean_values = [0.5 if v is None or np.isnan(v) else v for v in radar_values]
-
-vmin = min(clean_values)
-vmax = max(clean_values)
-norm_values = [0.5]*len(clean_values) if vmax == vmin else [(v - vmin) / (vmax - vmin) for v in clean_values]
-
-norm_values += norm_values[:1]
-angles = np.linspace(0, 2 * np.pi, len(radar_labels), endpoint=False).tolist()
-angles += angles[:1]
-
-fig, ax = plt.subplots(figsize=(5, 5), subplot_kw=dict(polar=True))
-ax.plot(angles, norm_values, "b-", linewidth=2)
-ax.fill(angles, norm_values, "b", alpha=0.25)
-ax.set_thetagrids(np.degrees(angles[:-1]), radar_labels)
-ax.set_ylim(0, 1)
-ax.set_title("公司财务结构雷达图")
-st.pyplot(fig)
