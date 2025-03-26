@@ -1,149 +1,156 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import yfinance as yf
 import joblib
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
 from datetime import datetime, timedelta
-import plotly.graph_objs as go
 
 # 页面配置
-st.set_page_config(page_title="估值分析平台", layout="wide")
+st.set_page_config(page_title="中英文股票估值分析平台", layout="wide")
 
 # 加载映射表
 stock_map = pd.read_csv("stock_map.csv")
 
-# 标题
+# 构建搜索字典
+def build_search_dict(df):
+    search_dict = {}
+    for _, row in df.iterrows():
+        key_cn = row["name_cn"]
+        key_en = row["name_en"]
+        key_code = row["code"]
+        label = f"{row['name_cn']} ({row['code']})"
+        for key in [key_cn, key_en, key_code]:
+            if pd.notna(key):
+                search_dict[key.upper()] = {
+                    "label": label,
+                    "code": row["code"],
+                    "industry": row["industry"],
+                    "name_cn": row["name_cn"],
+                    "name_en": row["name_en"]
+                }
+    return search_dict
+
+search_dict = build_search_dict(stock_map)
+
+# 输入框搜索（支持中文名/英文名/代码）
 st.title("📊 中英文股票估值分析平台")
-query = st.text_input("请搜索公司名称或股票代码 (支持中英文)", "苹果")
+user_input = st.text_input("请输入公司名称或股票代码（支持中英文）", value="苹果").strip().upper()
 
-# 精确匹配 ticker
-def find_ticker(query):
-    match = stock_map[stock_map.apply(
-        lambda row: query.lower() in str(row["name_cn"]).lower() or query.lower() in str(row["ticker"]).lower(),
-        axis=1
-    )]
-    if len(match) == 0:
-        return None, None
-    ticker = match.iloc[0]["ticker"]
-    name_cn = match.iloc[0]["name_cn"]
-    return ticker, name_cn
-
-ticker, name_cn = find_ticker(query)
-
-if not ticker:
-    st.error("未找到该公司，请检查名称或代码是否正确。")
+if user_input in search_dict:
+    info = search_dict[user_input]
+    code = info["code"]
+    industry = info["industry"]
+    name_cn = info["name_cn"]
+    name_en = info["name_en"]
+else:
+    st.warning("⚠️ 未找到对应公司，请检查拼写或更新 stock_map.csv")
     st.stop()
 
-st.header(f"📄 股票：{name_cn} ({ticker})")
+st.subheader(f"📄 股票：{name_cn} ({code})")
 
-# 获取数据
-stock = yf.Ticker(ticker)
+# 获取股票数据
+stock = yf.Ticker(code)
+info = stock.info
+
 try:
-    info = stock.info
-    pe = info.get("trailingPE")
-    pb = info.get("priceToBook")
-    roe = info.get("returnOnEquity")
-    current_price = info.get("currentPrice")
+    pe = info.get("trailingPE", np.nan)
+    pb = info.get("priceToBook", np.nan)
+    roe = info.get("returnOnEquity", np.nan)
+    price = info.get("currentPrice", np.nan)
+    eps = info.get("trailingEps", np.nan)
 except:
-    st.error("❌ 获取股票信息失败，可能该股票不支持估值数据。")
+    st.error("❌ 无法获取股票财务数据，请稍后重试。")
     st.stop()
 
-# 行业均值
-industry = stock_map.loc[stock_map["ticker"] == ticker, "industry"]
-if industry.empty:
-    st.warning("⚠️ 无法识别行业，部分估值功能不可用")
-    df_ind = pd.DataFrame()
-else:
-    df_ind = stock_map[stock_map["industry"] == industry.values[0]]
+# 显示股票指标
+st.subheader("📉 股票关键指标")
+col1, col2, col3 = st.columns(3)
+col1.metric("PE (市盈率)", f"{pe:.2f}" if not np.isnan(pe) else "N/A")
+col2.metric("PB (市净率)", f"{pb:.2f}" if not np.isnan(pb) else "N/A")
+col3.metric("ROE (%)", f"{roe*100:.2f}%" if not np.isnan(roe) else "N/A")
 
-# --- 显示指标 ---
-col1, col2 = st.columns(2)
-with col1:
-    st.subheader("📉 股票关键指标")
-    st.metric("PE (市盈率)", f"{pe:.2f}" if pe else "—")
-    st.metric("PB (市净率)", f"{pb:.2f}" if pb else "—")
-    st.metric("ROE (%)", f"{roe*100:.2f}%" if roe else "—")
+# 加载行业平均指标
+industry_df = pd.read_csv("industry_averages.csv")  # 文件应包含 columns: industry, PE, PB, ROE
+df_ind = industry_df[industry_df["industry"] == industry]
 
-with col2:
-    st.subheader("📊 行业平均指标")
-    st.metric("行业平均PE", f"{df_ind['PE'].mean():.2f}" if not df_ind.empty else "—")
-    st.metric("行业平均PB", f"{df_ind['PB'].mean():.2f}" if not df_ind.empty else "—")
-    st.metric("行业平均ROE", f"{df_ind['ROE'].mean()*100:.2f}%" if not df_ind.empty else "—")
+st.subheader("📊 行业平均指标")
+col4, col5, col6 = st.columns(3)
+col4.metric("行业平均PE", f"{df_ind['PE'].mean():.2f}")
+col5.metric("行业平均PB", f"{df_ind['PB'].mean():.2f}")
+col6.metric("行业平均ROE", f"{df_ind['ROE'].mean()*100:.2f}%")
 
-# --- 模型估值 ---
+# 综合判断（行业）
+pe_diff = pe - df_ind["PE"].mean()
+pb_diff = pb - df_ind["PB"].mean()
+roe_diff = roe - df_ind["ROE"].mean()
+
+industry_score = 0
+industry_score += -1 if pe_diff > 0 else 1
+industry_score += -1 if pb_diff > 0 else 1
+industry_score += 1 if roe_diff > 0 else -1
+
+industry_judgment = "高估" if industry_score < 0 else "低估"
+
+# 加载模型预测价格
+try:
+    model = joblib.load("valuation_model.pkl")
+    features = pd.DataFrame([{
+        "PE": pe, "PB": pb, "ROE": roe, "eps": eps
+    }])
+    predicted_price = model.predict(features)[0]
+    model_judgment = "高估" if price > predicted_price else "低估"
+except:
+    predicted_price = None
+    model_judgment = "N/A"
+
+# 综合估值判断
+score = 0
+score += 1 if industry_judgment == "低估" else -1
+score += 1 if model_judgment == "低估" else -1
+final_judgment = "低估" if score >= 0 else "高估"
+
+# 显示估值结果
 st.subheader("💲 估值结果")
-model = joblib.load("valuation_model.pkl")
-features = {
-    "PE": pe,
-    "PB": pb,
-    "ROE": roe * 100 if roe else None
-}
-df_feat = pd.DataFrame([features])
-predicted_price = model.predict(df_feat)[0]
+col7, col8, col9 = st.columns(3)
+col7.metric("📉 当前价格", f"${price:.2f}")
+col8.metric("📈 预测价格", f"${predicted_price:.2f}" if predicted_price else "N/A")
+col9.metric("🧠 模型判断", model_judgment)
 
-col3, col4 = st.columns(2)
-with col3:
-    st.metric("📉 当前价格", f"${current_price:.2f}" if current_price else "—")
-    st.metric("🧮 预测价格", f"${predicted_price:.2f}")
+st.markdown(f"📐 行业比较判断：**{industry_judgment}**")
+st.markdown(f"🧠 综合估值判断（50%模型 + 50%行业）：**{final_judgment}**")
 
-# 模型判断
-if current_price and predicted_price:
-    tag = "低估" if predicted_price > current_price else "高估"
-    st.metric("📈 模型判断", tag)
+# 财务指标雷达图
+st.subheader("📊 财务指标雷达图")
+radar_df = pd.DataFrame({
+    "指标": ["PE", "PB", "ROE"],
+    name_cn: [pe, pb, roe],
+    "行业平均": [df_ind["PE"].mean().values[0], df_ind["PB"].mean().values[0], df_ind["ROE"].mean().values[0]]
+})
+radar_df.set_index("指标", inplace=True)
+scaler = MinMaxScaler()
+scaled = scaler.fit_transform(radar_df)
+scaled_df = pd.DataFrame(scaled, columns=radar_df.columns, index=radar_df.index)
 
-# 行业估值判断
-def judge_by_industry(pe, pb, roe, df):
-    if df.empty:
-        return "—"
-    score = 0
-    score += pe < df["PE"].mean()
-    score += pb < df["PB"].mean()
-    score += roe > df["ROE"].mean()
-    return "低估" if score >= 2 else "高估"
+fig, ax = plt.subplots(figsize=(4, 4), subplot_kw=dict(polar=True))
+labels = scaled_df.index.tolist()
+angles = np.linspace(0, 2 * np.pi, len(labels), endpoint=False).tolist()
+angles += angles[:1]
+for col in scaled_df.columns:
+    values = scaled_df[col].tolist()
+    values += values[:1]
+    ax.plot(angles, values, label=col)
+    ax.fill(angles, values, alpha=0.1)
 
-ind_judge = judge_by_industry(pe, pb, roe, df_ind)
-st.metric("📊 行业比较判断", ind_judge)
+ax.set_thetagrids(np.degrees(angles[:-1]), labels)
+ax.set_title("归一化财务指标对比", size=14)
+ax.legend(loc='upper right')
+st.pyplot(fig)
 
-# 综合判断（可调整权重）
-if current_price and predicted_price:
-    tag = "低估" if (
-        (predicted_price > current_price and ind_judge == "低估")
-        or (predicted_price > current_price and ind_judge == "—")
-        or (predicted_price > current_price and ind_judge == "高估")
-    ) else "高估"
-    st.success(f"🧠 综合估值判断：{tag}")
-
-# --- 雷达图 ---
-if all([pe, pb, roe]):
-    st.subheader("📌 财务指标雷达图")
-    radar_df = pd.DataFrame({
-        "指标": ["PE", "PB", "ROE"],
-        "当前股票": [pe, pb, roe * 100],
-        "行业均值": [
-            df_ind["PE"].mean() if not df_ind.empty else 0,
-            df_ind["PB"].mean() if not df_ind.empty else 0,
-            df_ind["ROE"].mean() * 100 if not df_ind.empty else 0
-        ]
-    })
-
-    fig_radar = go.Figure()
-    for col in ["当前股票", "行业均值"]:
-        fig_radar.add_trace(go.Scatterpolar(
-            r=radar_df[col],
-            theta=radar_df["指标"],
-            fill='toself',
-            name=col
-        ))
-    fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True)), showlegend=True)
-    st.plotly_chart(fig_radar, use_container_width=True)
-
-# --- 价格走势 ---
-st.subheader("📈 过去12个月价格趋势")
-hist = stock.history(period="1y")
-if not hist.empty:
-    fig_price = go.Figure()
-    fig_price.add_trace(go.Scatter(x=hist.index, y=hist["Close"], name="收盘价"))
-    fig_price.update_layout(xaxis_title="日期", yaxis_title="价格 ($)")
-    st.plotly_chart(fig_price, use_container_width=True)
-else:
-    st.warning("⚠️ 无法获取历史价格数据")
+# 历史价格走势（12个月）
+st.subheader("📈 近12个月价格走势")
+end_date = datetime.today()
+start_date = end_date - timedelta(days=365)
+hist = stock.history(start=start_date, end=end_date)
+st.line_chart(hist["Close"])
