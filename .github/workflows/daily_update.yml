@@ -1,36 +1,35 @@
-name: Daily Model Update
+name: update-model
 
 on:
   schedule:
-    - cron: '0 1 * * *'  # 每天 UTC 凌晨1点运行（北京时间早上9点）
-  workflow_dispatch:     # 可手动触发
+    - cron: "0 1 * * *"  # 每天凌晨 1 点 UTC 自动运行
+  workflow_dispatch:    # 支持手动触发
 
 jobs:
-  update-model:
+  update:
     runs-on: ubuntu-latest
 
     steps:
-    - name: 🔄 Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-    - name: 🐍 Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: 3.10
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.12  # ✅ 使用更现代稳定的版本
 
-    - name: 📦 Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install yfinance xgboost joblib pandas numpy
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas numpy xgboost joblib
 
-    - name: ⚙️ Run daily model update script
-      run: python daily_update.py
+      - name: Run daily update script
+        run: python daily_update.py
 
-    - name: 📤 Commit updated model
-      run: |
-        git config user.name "github-actions"
-        git config user.email "github-actions@github.com"
-        git add valuation_model.pkl
-        git commit -m "🤖 自动每日更新估值模型 $(date +'%Y-%m-%d')" || echo "No changes to commit"
-        git push
+      - name: Commit and push updated model
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add valuation_model.pkl industry_averages.csv
+          git commit -m "🔄 Daily model & industry update"
+          git push
