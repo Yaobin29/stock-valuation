@@ -130,11 +130,12 @@ st.markdown("### 📈 股票近半年（ 6月度）价格走势")
 
 try:
     hist = yf.download(code, period="6mo", interval="1d", progress=False)
-   if hist.empty or "Close" not in hist.columns:
-    raise ValueError("无有效价格数据")
-price_data = hist["Close"].dropna()
-price_df = pd.DataFrame({"日期": price_data.index, "收盘价": price_data.values}).set_index("日期")
-st.line_chart(price_df)
+    if hist.empty or "Close" not in hist.columns:
+        raise ValueError("无有效价格数据")
+    price_data = hist["Close"].dropna()
+    price_df = pd.DataFrame({"日期": price_data.index, "月收盘价": price_data.values}).set_index("日期")
+    st.line_chart(price_df)
 except:
     st.warning("⚠️ 无法获取历史价格数据。可能该股票无月度数据或接口异常。")
+
 
