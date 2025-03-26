@@ -1,0 +1,39 @@
+# 方法 2：使用 GitHub Actions 实现自动每日更新
+# 请将此文件命名为 `.github/workflows/daily_update.yml`
+# 并放在你的 GitHub 仓库的根目录中（注意 .github 是隐藏文件夹）
+
+name: Daily Valuation Model Update
+
+on:
+  schedule:
+    - cron: '0 1 * * *'  # 每天 UTC 时间 1:00 运行（北京时间上午 9 点）
+  workflow_dispatch:     # 允许手动触发
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run daily update script
+        run: |
+          python ml_model.py
+
+      - name: Commit updated model
+        run: |
+          git config --global user.email "you@example.com"
+          git config --global user.name "your-username"
+          git add valuation_model.pkl
+          git commit -m "Auto update model $(date '+%Y-%m-%d')" || echo "No changes to commit"
+          git push
