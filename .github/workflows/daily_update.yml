@@ -1,16 +1,16 @@
-name: update-model
+name: Daily Model Update
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 每天 UTC 0 点运行
-  workflow_dispatch:
+    - cron: '0 2 * * *'  # 每天凌晨 2 点 UTC（等于北京时间上午 10 点）
+  workflow_dispatch:      # 手动触发
 
 jobs:
-  update:
+  update-model:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repo
+    - name: Checkout repository
       uses: actions/checkout@v3
 
     - name: Set up Python
@@ -20,17 +20,17 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install --upgrade pip
+        python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install scikit-learn  # ✅ 额外手动安装 sklearn
+        pip install xgboost scikit-learn yfinance
 
     - name: Run daily update script
       run: python daily_update.py
 
     - name: Commit and push updated model
       run: |
-        git config user.name github-actions
-        git config user.email github-actions@github.com
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
         git add valuation_model.pkl industry_avg.json
-        git commit -m "🔁 Daily model & industry average update" || echo "No changes to commit"
-        git push
+        git commit -m "📈 Daily model & industry average update" || echo "No changes to commit"
+        git push https://x-access-token:${{ secrets.ACTIONS_DEPLOY_KEY }}@github.com/${{ github.repository }}.git HEAD:main
