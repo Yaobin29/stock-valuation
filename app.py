@@ -125,3 +125,18 @@ final_score = model_score * weight + industry_score_final * (1 - weight)
 final_judge = "低估" if final_score < 0.5 else "高估"
 st.markdown(f"### 🧮 综合估值判断（50%模型 + 50%行业）：{final_judge}")
 
+# 📈 股票近60个月价格变化
+st.markdown("### 📈 股票近5年（月度）价格走势")
+
+try:
+    hist = yf.download(code, period="60mo", interval="1mo")
+    price_data = hist["Close"].dropna()
+    price_df = pd.DataFrame({
+        "日期": price_data.index,
+        "月收盘价": price_data.values
+    }).set_index("日期")
+
+    st.line_chart(price_df)
+except:
+    st.warning("⚠️ 无法获取历史价格数据。可能该股票无月度数据或接口异常。")
+
