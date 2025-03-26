@@ -1,161 +1,111 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
 import numpy as np
+import yfinance as yf
 import joblib
-import difflib
+import matplotlib.pyplot as plt
 
-st.set_page_config(layout="wide")
-st.title("中英文股票估值分析平台")
+# 加载项目模型
+model = joblib.load("valuation_model.pkl")
 
-# 加载公司映射表
-@st.cache_data
-def load_stock_map():
-    df = pd.read_csv("stock_map.csv")
-    return df
+# 读取股票映射列表
+stock_map = pd.read_csv("stock_map.csv")
 
-stock_df = load_stock_map()
+# 创建中英文合并表
+stock_map["label"] = stock_map["name_cn"] + " (" + stock_map["code"] + ")"
 
-# 输入框：支持中英文或代码
-user_input = st.text_input("请输入公司名称或股票代码（支持中英文，如 苹果、NVDA、0700.HK）")
+# 页面配置
+st.set_page_config(page_title="中英文股票估值分析平台", layout="wide")
+st.title("\U0001F4C8 中英文股票估值分析平台")
 
-if not user_input:
-    st.stop()
+# 搜索框
+query = st.selectbox("\n请输入公司名或股票代码（支持中英文）", stock_map["label"].tolist())
 
-# 模糊匹配
-matches = []
-for _, row in stock_df.iterrows():
-    if user_input.lower() in str(row["name_cn"]).lower() or \
-       user_input.lower() in str(row["name_en"]).lower() or \
-       user_input.lower() in str(row["code"]).lower():
-        matches.append(row)
+# 解析选中股票
+selected_row = stock_map[stock_map["label"] == query].iloc[0]
+ticker = selected_row["code"]
+industry = selected_row["industry"]
 
-if len(matches) == 0:
-    st.error("未找到匹配的股票，请检查输入或扩展 stock_map.csv")
-    st.stop()
-
-stock_row = matches[0]
-code = stock_row["code"]
-industry = stock_row["industry"]
-name_cn = stock_row["name_cn"]
-name_en = stock_row["name_en"]
-
-st.subheader(f"🎯 股票：{name_cn} ({code})")
-
-# 加载模型
+# 应用 Yahoo Finance API
+stock = yf.Ticker(ticker)
 try:
-    model = joblib.load("valuation_model.pkl")
+    info = stock.info
 except:
-    st.error("未找到机器学习模型，请确保 valuation_model.pkl 已上传")
+    st.error("无法获取股票数据")
     st.stop()
 
-# 获取目标股票数据
-def get_stock_info(ticker):
-    try:
-        stock = yf.Ticker(ticker)
-        info = stock.info
-        data = {
-            "pe": info.get("trailingPE", np.nan),
-            "pb": info.get("priceToBook", np.nan),
-            "roe": info.get("returnOnEquity", np.nan),
-            "eps": info.get("trailingEps", np.nan),
-            "revenue_growth": info.get("revenueGrowth", np.nan),
-            "current_price": info.get("currentPrice", np.nan)
-        }
-        if np.isnan(data["current_price"]):
-            hist = stock.history(period="1d")
-            data["current_price"] = hist["Close"].iloc[-1] if not hist.empty else np.nan
-        return data, stock
-    except:
-        return None, None
+# 抽取关键指标
+pe = info.get("trailingPE")
+pb = info.get("priceToBook")
+roe = info.get("returnOnEquity")
+eps = info.get("trailingEps")
+revenue = info.get("revenueGrowth")
+gross = info.get("grossMargins")
+cap = info.get("marketCap")
+cashflow = info.get("freeCashflow")
+price = info.get("currentPrice")
 
-target_data, stock_obj = get_stock_info(code)
+# 词汇表示
+st.markdown(f"### \U0001F4C4 股票：**{selected_row['name_cn']} ({ticker})**")
 
-if target_data is None or any(np.isnan(v) for v in list(target_data.values())[:5]):
-    st.error("⚠️ 无法获取该股票完整数据，暂时无法估值。")
-    st.stop()
+col1, col2 = st.columns(2)
+with col1:
+    st.subheader("\U0001F4C9 股票关键指标")
+    st.metric("PE (市盈率)", f"{pe:.2f}" if pe else "-")
+    st.metric("PB (市净率)", f"{pb:.2f}" if pb else "-")
+    st.metric("ROE (%)", f"{roe*100:.2f}%" if roe else "-")
 
-# 显示关键财务指标
-st.subheader("📊 股票关键指标")
-col1, col2, col3 = st.columns(3)
-col1.metric("PE (市盈率)", f"{target_data['pe']:.2f}")
-col2.metric("PB (市净率)", f"{target_data['pb']:.2f}")
-col3.metric("ROE (%)", f"{target_data['roe'] * 100:.2f}")
+with col2:
+    st.subheader("\U0001F4CA 行业平均指标")
+    industry_df = stock_map[stock_map["industry"] == industry]["code"]
+    peer_data = []
+    for code in industry_df:
+        try:
+            peer = yf.Ticker(code).info
+            peer_data.append([
+                peer.get("trailingPE"),
+                peer.get("priceToBook"),
+                peer.get("returnOnEquity")
+            ])
+        except:
+            continue
+    peer_df = pd.DataFrame(peer_data, columns=["PE", "PB", "ROE"]).dropna()
+    st.metric("行业平均PE", f"{peer_df['PE'].mean():.2f}")
+    st.metric("行业平均PB", f"{peer_df['PB'].mean():.2f}")
+    st.metric("行业平均ROE", f"{peer_df['ROE'].mean()*100:.2f}%")
 
-# 获取行业对比指标
-industry_peers = stock_df[(stock_df["industry"] == industry) & (stock_df["code"] != code)]["code"].tolist()
+# 构造特征进行预测
+model_price = "-"
+model_tag = "-"
+if all([pe, pb, roe, eps, revenue, gross, cap, cashflow]):
+    X_pred = pd.DataFrame([[pe, pb, roe, eps, revenue, gross, cap, cashflow]],
+                          columns=["trailingPE", "priceToBook", "returnOnEquity",
+                                   "trailingEps", "revenueGrowth", "grossMargins",
+                                   "marketCap", "freeCashflow"])
+    model_price = model.predict(X_pred)[0]
+    model_tag = "高估" if price > model_price else "低估"
 
-peers_data = []
-for peer_code in industry_peers:
-    d, _ = get_stock_info(peer_code)
-    if d and not any(np.isnan([d["pe"], d["pb"], d["roe"]])):
-        peers_data.append(d)
-
-if peers_data:
-    peer_df = pd.DataFrame(peers_data)
-    avg_pe = peer_df["pe"].mean()
-    avg_pb = peer_df["pb"].mean()
-    avg_roe = peer_df["roe"].mean()
-
-    st.subheader(f"{industry}行业平均指标")
-    col4, col5, col6 = st.columns(3)
-    col4.metric("行业平均PE", f"{avg_pe:.2f}")
-    col5.metric("行业平均PB", f"{avg_pb:.2f}")
-    col6.metric("行业平均ROE", f"{avg_roe * 100:.2f}%")
-
-    # 多维判断
-    score = 0
-    if target_data["pe"] < avg_pe * 0.9: score += 1
-    if target_data["pb"] < avg_pb * 0.9: score += 1
-    if target_data["roe"] > avg_roe * 1.1: score += 1
-
+# 简单的行业平均对比判断
+industry_judgement = "-"
+score = 0
+if pe and pb and roe and not peer_df.empty:
+    if pe < peer_df["PE"].mean(): score += 1
+    if pb < peer_df["PB"].mean(): score += 1
+    if roe > peer_df["ROE"].mean(): score += 1
     if score >= 2:
-        industry_judgment = "低估"
-    elif score == 1:
-        industry_judgment = "合理"
+        industry_judgement = "低估"
     else:
-        industry_judgment = "高估"
-else:
-    st.warning("⚠️ 无法获取行业参考数据")
-    industry_judgment = "未知"
+        industry_judgement = "高估"
 
-# 模型预测价格
-X = pd.DataFrame([{
-    "pe": target_data["pe"],
-    "pb": target_data["pb"],
-    "roe": target_data["roe"],
-    "eps": target_data["eps"],
-    "revenue_growth": target_data["revenue_growth"]
-}])
-try:
-    predicted_price = model.predict(X)[0]
-except:
-    predicted_price = np.nan
+# 显示估值结果
+st.subheader("\U0001F4C8 估值结果")
+st.write(f"**📅 当前价格：** ${price:.2f}" if price else "")
+st.write(f"**🔢 预测价格：** ${model_price:.2f}" if model_price != "-" else "")
+st.write(f"**\U0001F4CB 模型判断 (基于过去数据学习):** {model_tag}")
+st.write(f"**🧠 行业比较判断 (基于 PE/PB/ROE):** {industry_judgement}")
 
-st.subheader("📈 模型估值结果")
-col7, col8, col9 = st.columns(3)
-col7.metric("当前价格", f"${target_data['current_price']:.2f}")
-col8.metric("预测价格", f"${predicted_price:.2f}" if not np.isnan(predicted_price) else "无法预测")
-if not np.isnan(predicted_price):
-    if target_data["current_price"] < predicted_price * 0.9:
-        pred_judgment = "低估"
-    elif target_data["current_price"] > predicted_price * 1.1:
-        pred_judgment = "高估"
-    else:
-        pred_judgment = "合理"
-    col9.metric("模型判断", pred_judgment)
-else:
-    col9.write("模型判断不可用")
-
-st.subheader(f"🧠 综合估值判断：{industry_judgment}")
-
-# 走势图
-try:
-    hist = stock_obj.history(period="1mo")
-    st.subheader("📉 近30天价格走势")
-    if not hist.empty:
-        st.line_chart(hist["Close"])
-    else:
-        st.write("暂无历史数据")
-except:
-    st.warning("⚠️ 无法加载价格走势")
+# 显示近30天股价
+st.subheader("\U0001F4C6 近30天价格走势")
+hist = stock.history(period="1mo")
+if not hist.empty:
+    st.line_chart(hist["Close"])
