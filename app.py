@@ -118,15 +118,22 @@ st.markdown(f"### 🧮 综合估值判断（50%模型 + 50%行业）：{final_ju
 
 # 股票近6个月价格走势
 st.markdown("### 📈 股票近6个月价格走势")
+
 try:
-    hist = yf.download(code, period="6mo", interval="1d", progress=False)
+    stock = yf.Ticker(code)
+    hist = stock.history(period="6mo", interval="1d")
     if hist.empty or "Close" not in hist.columns:
         raise ValueError("无有效价格数据")
+
     price_data = hist["Close"].dropna()
     price_df = pd.DataFrame({"日期": price_data.index, "收盘价": price_data.values}).set_index("日期")
+
+    # 使用 Streamlit 风格图表
     st.line_chart(price_df)
-except:
-    st.warning("⚠️ 无法获取历史价格数据。可能该股票无日度数据或接口异常。")
+
+except Exception as e:
+    st.warning(f"⚠️ 无法获取历史价格数据。可能该股票无日度数据或接口异常。\n\n错误信息：{e}")
+
 
 
 
