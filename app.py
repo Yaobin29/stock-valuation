@@ -134,7 +134,7 @@ try:
     raise ValueError("无有效价格数据")
 price_data = hist["Close"].dropna()
 price_df = pd.DataFrame({"日期": price_data.index, "收盘价": price_data.values}).set_index("日期")
-st.line_chart(price_df))
+st.line_chart(price_df)
 except:
     st.warning("⚠️ 无法获取历史价格数据。可能该股票无月度数据或接口异常。")
 
