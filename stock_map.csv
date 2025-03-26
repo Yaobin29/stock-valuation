@@ -2,14 +2,38 @@ name_cn,name_en,code,market,industry
 苹果,Apple Inc,AAPL,US,科技
 英伟达,NVIDIA,NVDA,US,科技
 AMD,Advanced Micro Devices,AMD,US,科技
-礼来,Eli Lilly,LLY,US,医药
-诺和诺德,Novo Nordisk,NVO,US,医药
-百济神州,BeiGene,BGNE,US,医药
-药明生物,WuXi Biologics,2269.HK,HK,医药
-腾讯控股,Tencent,0700.HK,HK,科技
+微软,Microsoft,MSFT,US,科技
+谷歌,Alphabet,GOOGL,US,科技
+Meta,Meta Platforms,META,US,科技
+特斯拉,Tesla,TSLA,US,科技
 阿里巴巴,Alibaba,9988.HK,HK,科技
-美团,Meituan,3690.HK,HK,科技
+腾讯控股,Tencent,0700.HK,HK,科技
 京东,JD.com,9618.HK,HK,科技
+美团,Meituan,3690.HK,HK,科技
 辉瑞,Pfizer,PFE,US,医药
 默沙东,Merck,MRK,US,医药
 强生,Johnson & Johnson,JNJ,US,医药
+诺和诺德,Novo Nordisk,NVO,US,医药
+礼来,Eli Lilly,LLY,US,医药
+百济神州,BeiGene,BGNE,US,医药
+药明生物,WuXi Biologics,2269.HK,HK,医药
+阳光电源,Sungrow Power,300274.SZ,CN,新能源
+隆基绿能,LONGi Green Energy,601012.SS,CN,新能源
+晶澳科技,JA Solar,002459.SZ,CN,新能源
+First Solar,First Solar,FSLR,US,新能源
+Plug Power,Plug Power,PLUG,US,新能源
+比亚迪,BYD,1211.HK,HK,电动汽车
+小鹏汽车,Xpeng,9868.HK,HK,电动汽车
+蔚来,NIO,NIO,US,电动汽车
+理想汽车,Li Auto,LI,US,电动汽车
+Lucid Motors,Lucid,LCID,US,电动汽车
+Rivian,Rivian,RIVN,US,电动汽车
+可口可乐,Coca-Cola,KO,US,消费
+宝洁,Procter & Gamble,PG,US,消费
+星巴克,Starbucks,SBUX,US,消费
+Costco,Costco,COST,US,消费
+Visa,Visa,V,US,银行
+万事达,Mastercard,MA,US,银行
+摩根大通,JPMorgan Chase,JPM,US,银行
+中国银行,Bank of China,3988.HK,HK,银行
+工商银行,ICBC,1398.HK,HK,银行
