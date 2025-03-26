@@ -7,4 +7,4 @@ scikit-learn
 xgboost
 matplotlib
 plotly
-pip install scikit-learn
+scikit-learn
