@@ -1,3 +1,7 @@
 streamlit
-numpy
 yfinance
+pandas
+numpy
+joblib
+scikit-learn
+xgboost
