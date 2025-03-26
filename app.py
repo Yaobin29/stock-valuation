@@ -14,8 +14,8 @@ stock_map = pd.read_csv("stock_map.csv")
 stock_map["label"] = stock_map["name_cn"] + " (" + stock_map["code"] + ")"
 
 # 页面配置
-st.set_page_config(page_title="中英文股票估值分析平台", layout="wide")
-st.title("\U0001F4CA 中英文股票估值分析平台")
+st.set_page_config(page_title="股票估值分析平台", layout="wide")
+st.title("\U0001F4CA 股票估值分析平台")
 st.markdown("### 请搜索公司名称或股票代码 (支持中英文)")
 
 # 搜索框 (使用格式函数显示)
