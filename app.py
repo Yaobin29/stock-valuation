@@ -9,8 +9,12 @@ stocks = {
     "英伟达 (NVDA)": "NVDA",
     "AMD (AMD)": "AMD",
     "诺和诺德 (NVO)": "NVO",
-    "礼来 (LLY)": "LLY"
+    "礼来 (LLY)": "LLY",
+    "Cloudflare (NET)": "NET",
+    "百济神州 (BGNE)": "BGNE",
+    "药明生物 (2269.HK)": "2269.HK"
 }
+
 
 # 选择股票
 stock_name = st.selectbox("请选择股票：", list(stocks.keys()))
