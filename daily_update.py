@@ -3,6 +3,7 @@ import yfinance as yf
 import numpy as np
 from xgboost import XGBRegressor
 import joblib
+import json
 
 print("📥 Loading company list from stock_map.csv...")
 stock_map = pd.read_csv("stock_map.csv")
@@ -60,3 +61,26 @@ print(f"📉 MAE: ${mae:.2f}")
 # 保存模型
 joblib.dump(model, "valuation_model.pkl")
 print("✅ Saved model as valuation_model.pkl")
+
+# 计算行业平均指标
+print("📊 Calculating industry averages...")
+industry_avg = {}
+
+for industry in stock_map["industry"].unique():
+    codes_in_industry = stock_map[stock_map["industry"] == industry]["code"]
+    df_ind = df[df["code"].isin(codes_in_industry)]
+
+    if df_ind.empty:
+        continue
+
+    industry_avg[industry] = {
+        "avg_PE": round(df_ind["trailingPE"].mean(), 2),
+        "avg_PB": round(df_ind["priceToBook"].mean(), 2),
+        "avg_ROE": round(df_ind["returnOnEquity"].mean() * 100, 2)
+    }
+
+# 保存为 JSON 文件
+with open("industry_avg.json", "w") as f:
+    json.dump(industry_avg, f, indent=2, ensure_ascii=False)
+
+print("✅ Saved industry_avg.json with average indicators.")
