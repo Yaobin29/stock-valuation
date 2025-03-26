@@ -126,20 +126,32 @@ final_judge = "低估" if final_score < 0.5 else "高估"
 st.markdown(f"### 🧮 综合估值判断（50%模型 + 50%行业）：{final_judge}")
 
 # 📊 财务指标雷达图
-st.markdown("### 📌 财务指标雷达图")
-radar_labels = ["PE", "PB", "ROE", "EPS", "收入增长", "毛利率", "自由现金流"]
-radar_values = [pe, pb, roe, eps, revenue_growth, gross_margin, free_cashflow]
+st.markdown("### 📊 财务指标雷达图")
 
-# 归一化处理
-norm = lambda x: (x - np.nanmin(x)) / (np.nanmax(x) - np.nanmin(x)) if np.nanmax(x) != np.nanmin(x) else x
-norm_values = [0.5 if np.isnan(v) else v for v in radar_values]
+radar_labels = ["PE", "PB", "ROE", "EPS", "收入增长", "毛利率", "自由现金流"]
+radar_raw = [pe, pb, roe, eps, revenue_growth, gross_margin, free_cashflow]
+
+# 替换为 0.5 或中性值以避免错误
+radar_clean = [0.5 if v is None or np.isnan(v) else v for v in radar_raw]
+
+# 归一化处理（简单 max 标准化）
+def normalize(vals):
+    vmax = max(vals)
+    vmin = min(vals)
+    if vmax == vmin:
+        return [0.5] * len(vals)
+    return [(v - vmin) / (vmax - vmin) for v in vals]
+
+radar_norm = normalize(radar_clean)
+radar_norm += radar_norm[:1]
 angles = np.linspace(0, 2 * np.pi, len(radar_labels), endpoint=False).tolist()
-norm_values += norm_values[:1]
 angles += angles[:1]
 
+# 绘图
 fig, ax = plt.subplots(figsize=(5, 5), subplot_kw=dict(polar=True))
-ax.plot(angles, norm_values, "b-", linewidth=2)
-ax.fill(angles, norm_values, "b", alpha=0.25)
+ax.plot(angles, radar_norm, "b-", linewidth=2)
+ax.fill(angles, radar_norm, "b", alpha=0.25)
 ax.set_thetagrids(np.degrees(angles[:-1]), radar_labels)
-ax.set_title("公司财务特征雷达图")
+ax.set_title("公司财务结构雷达图")
+ax.set_ylim(0, 1)
 st.pyplot(fig)
