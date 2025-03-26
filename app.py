@@ -1,146 +1,145 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import yfinance as yf
-import joblib
 import matplotlib.pyplot as plt
-from math import pi
+import numpy as np
+import joblib
 
-# 加载项目模型
-model = joblib.load("valuation_model.pkl")
-
-# 读取股票映射列表
-stock_map = pd.read_csv("stock_map.csv")
-stock_map["label"] = stock_map["name_cn"] + " (" + stock_map["code"] + ")"
-
-# 页面配置
+# 设置页面
 st.set_page_config(page_title="中英文股票估值分析平台", layout="wide")
-st.title("\U0001F4CA 中英文股票估值分析平台")
-st.markdown("### 请搜索公司名称或股票代码 (支持中英文)")
 
-# 搜索框 (使用格式函数显示)
-def format_label(label):
-    row = stock_map[stock_map["label"] == label].iloc[0]
-    return f"{row['name_cn']} ({row['code']})"
+# 加载股票映射文件
+stock_map = pd.read_csv("stock_map.csv")
 
-selected_label = st.selectbox("", stock_map["label"].tolist(), format_func=format_label)
-selected_row = stock_map[stock_map["label"] == selected_label].iloc[0]
-ticker = selected_row["code"]
-industry = selected_row["industry"]
+# 构建搜索选项（中英文+代码）
+stock_map["display"] = stock_map["name_cn"] + " (" + stock_map["code"] + ")"
+search_options = stock_map["display"].tolist()
 
-# 应用 Yahoo Finance API
-stock = yf.Ticker(ticker)
+# 搜索栏
+st.title("📈 中英文股票估值分析平台")
+query = st.text_input("请输入公司名称或股票代码（支持中英文，如 苹果、NVDA、0700.HK）", "")
+
+# 匹配逻辑
+matched = stock_map[stock_map["display"].str.contains(query, case=False, na=False)] if query else stock_map
+selected = st.selectbox("请选择股票：", matched["display"].tolist())
+
+# 获取选中行
+row = stock_map[stock_map["display"] == selected].iloc[0]
+code = row["code"]
+industry = row["industry"]
+
+# 获取股票数据
+stock = yf.Ticker(code)
+info = stock.info
+
+# 抓取财务指标
+def get_metric(name):
+    return info.get(name, np.nan)
+
+pe = get_metric("trailingPE")
+pb = get_metric("priceToBook")
+roe = get_metric("returnOnEquity")
+eps = get_metric("trailingEps")
+revenue_growth = get_metric("revenueGrowth")
+gross_margin = get_metric("grossMargins")
+free_cashflow = get_metric("freeCashflow")
+current_price = get_metric("currentPrice")
+
+# 显示标题
+st.markdown(f"### 📌 股票：{row['name_cn']} ({code})")
+
+# 主要财务指标展示
+st.markdown("### 📊 股票关键指标")
+col1, col2, col3 = st.columns(3)
+col1.metric("PE (市盈率)", f"{pe:.2f}" if not np.isnan(pe) else "-")
+col2.metric("PB (市净率)", f"{pb:.2f}" if not np.isnan(pb) else "-")
+col3.metric("ROE (%)", f"{roe*100:.2f}%" if not np.isnan(roe) else "-")
+
+# 获取行业平均
+industry_stocks = stock_map[stock_map["industry"] == industry]["code"].tolist()
+industry_pe, industry_pb, industry_roe = [], [], []
+
+for ticker in industry_stocks:
+    try:
+        data = yf.Ticker(ticker).info
+        industry_pe.append(data.get("trailingPE", np.nan))
+        industry_pb.append(data.get("priceToBook", np.nan))
+        industry_roe.append(data.get("returnOnEquity", np.nan))
+    except:
+        continue
+
+avg_pe = np.nanmean(industry_pe)
+avg_pb = np.nanmean(industry_pb)
+avg_roe = np.nanmean(industry_roe)
+
+st.markdown(f"### 🏭 {industry}行业平均指标")
+col4, col5, col6 = st.columns(3)
+col4.metric("行业平均PE", f"{avg_pe:.2f}" if not np.isnan(avg_pe) else "-")
+col5.metric("行业平均PB", f"{avg_pb:.2f}" if not np.isnan(avg_pb) else "-")
+col6.metric("行业平均ROE", f"{avg_roe*100:.2f}%" if not np.isnan(avg_roe) else "-")
+
+# 判断逻辑
+def tag(val, avg, high_good=True):
+    if np.isnan(val) or np.isnan(avg):
+        return 0.5
+    return 1 if (val > avg if high_good else val < avg) else 0
+
+score_pe = tag(pe, avg_pe, high_good=False)
+score_pb = tag(pb, avg_pb, high_good=False)
+score_roe = tag(roe, avg_roe, high_good=True)
+
+industry_score = (score_pe + score_pb + score_roe) / 3
+industry_judge = "低估" if industry_score >= 0.6 else "高估"
+st.markdown(f"### 🧠 行业对比判断：{industry_judge}")
+
+# 加载模型并预测
 try:
-    info = stock.info
+    model = joblib.load("valuation_model.pkl")
+    features = pd.DataFrame([{
+        "trailingPE": pe,
+        "priceToBook": pb,
+        "returnOnEquity": roe,
+        "trailingEps": eps,
+        "revenueGrowth": revenue_growth,
+        "grossMargins": gross_margin,
+        "marketCap": info.get("marketCap", np.nan),
+        "freeCashflow": free_cashflow
+    }])
+    pred_price = model.predict(features)[0]
+    model_judge = "低估" if current_price < pred_price else "高估"
 except:
-    st.error("无法获取股票数据")
-    st.stop()
+    pred_price = None
+    model_judge = "-"
 
-# 抽取关键指标
-pe = info.get("trailingPE")
-pb = info.get("priceToBook")
-roe = info.get("returnOnEquity")
-eps = info.get("trailingEps")
-revenue = info.get("revenueGrowth")
-gross = info.get("grossMargins")
-cap = info.get("marketCap")
-cashflow = info.get("freeCashflow")
-price = info.get("currentPrice")
-
-st.markdown(f"### 📄 股票：**{selected_row['name_cn']} ({ticker})**")
-
-col1, col2 = st.columns(2)
-with col1:
-    st.subheader("\U0001F4C9 股票关键指标")
-    st.metric("PE (市盈率)", f"{pe:.2f}" if pe else "-")
-    st.metric("PB (市净率)", f"{pb:.2f}" if pb else "-")
-    st.metric("ROE (%)", f"{roe*100:.2f}%" if roe else "-")
-
-with col2:
-    st.subheader("\U0001F4CA 行业平均指标")
-    industry_df = stock_map[stock_map["industry"] == industry]["code"]
-    peer_data = []
-    for code in industry_df:
-        try:
-            peer = yf.Ticker(code).info
-            peer_data.append([
-                peer.get("trailingPE"),
-                peer.get("priceToBook"),
-                peer.get("returnOnEquity"),
-                peer.get("revenueGrowth"),
-                peer.get("grossMargins"),
-                peer.get("freeCashflow")
-            ])
-        except:
-            continue
-    peer_df = pd.DataFrame(peer_data, columns=["PE", "PB", "ROE", "Revenue", "Gross", "Cashflow"]).dropna()
-    st.metric("行业平均PE", f"{peer_df['PE'].mean():.2f}")
-    st.metric("行业平均PB", f"{peer_df['PB'].mean():.2f}")
-    st.metric("行业平均ROE", f"{peer_df['ROE'].mean()*100:.2f}%")
-
-# 估值预测
-model_price = "-"
-model_tag = "-"
-model_score = None
-if all([pe, pb, roe, eps, revenue, gross, cap, cashflow]):
-    X_pred = pd.DataFrame([[pe, pb, roe, eps, revenue, gross, cap, cashflow]],
-                          columns=["trailingPE", "priceToBook", "returnOnEquity",
-                                   "trailingEps", "revenueGrowth", "grossMargins",
-                                   "marketCap", "freeCashflow"])
-    model_price = model.predict(X_pred)[0]
-    model_tag = "高估" if price > model_price else "低估"
-    model_score = 1 if price > model_price else 0
-
-# 行业比较判断
-industry_judgement = "-"
-industry_score = None
-score = 0
-if pe and pb and roe and not peer_df.empty:
-    if pe < peer_df["PE"].mean(): score += 1
-    if pb < peer_df["PB"].mean(): score += 1
-    if roe > peer_df["ROE"].mean(): score += 1
-    if score >= 2:
-        industry_judgement = "低估"
-        industry_score = 0
-    else:
-        industry_judgement = "高估"
-        industry_score = 1
+st.markdown("### 📉 模型估值结果")
+col7, col8, col9 = st.columns(3)
+col7.metric("当前价格", f"${current_price:.2f}" if current_price else "-")
+col8.metric("预测价格", f"${pred_price:.2f}" if pred_price else "-")
+col9.metric("模型判断", model_judge)
 
 # 综合判断
-final_judgement = "-"
-if model_score is not None and industry_score is not None:
-    alpha = 0.5
-    score_combined = model_score * alpha + industry_score * (1 - alpha)
-    final_judgement = "高估" if score_combined >= 0.5 else "低估"
+weight = 0.5
+model_score = 0 if model_judge == "低估" else 1
+industry_score_final = 0 if industry_judge == "低估" else 1
+final_score = model_score * weight + industry_score_final * (1 - weight)
+final_judge = "低估" if final_score < 0.5 else "高估"
+st.markdown(f"### 🧮 综合估值判断（50%模型 + 50%行业）：{final_judge}")
 
-# 显示估值结果
-st.subheader("\U0001F4B2 估值结果")
-st.write(f"**📅 当前价格：** ${price:.2f}" if price else "")
-st.write(f"**🔢 预测价格：** ${model_price:.2f}" if model_price != "-" else "")
-st.write(f"**\U0001F4CB 模型判断:** {model_tag}")
-st.write(f"**🧠 行业比较判断:** {industry_judgement}")
-st.write(f"**🧹 综合估值判断 (50%模型 + 50%行业):** {final_judgement}")
+# 📊 财务指标雷达图
+st.markdown("### 📌 财务指标雷达图")
+radar_labels = ["PE", "PB", "ROE", "EPS", "收入增长", "毛利率", "自由现金流"]
+radar_values = [pe, pb, roe, eps, revenue_growth, gross_margin, free_cashflow]
 
-# 加入资产极约化 radar chart
-st.subheader("\U0001F4D0 资产极约化指标雷达图")
-if not peer_df.empty:
-    avg = peer_df.mean()
-    target = [pe, pb, roe, revenue, gross, cashflow]
-    features = ["PE", "PB", "ROE", "Revenue", "Gross", "Cashflow"]
-    normalized = [target[i] / avg[features[i]] if avg[features[i]] else 0 for i in range(len(features))]
-    angles = [n / float(len(features)) * 2 * pi for n in range(len(features))]
-    normalized += [normalized[0]]
-    angles += [angles[0]]
-    fig, ax = plt.subplots(figsize=(5,5), subplot_kw=dict(polar=True))
-    ax.plot(angles, normalized, linewidth=2)
-    ax.fill(angles, normalized, alpha=0.25)
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(features)
-    ax.set_yticklabels([])
-    st.pyplot(fig)
+# 归一化处理
+norm = lambda x: (x - np.nanmin(x)) / (np.nanmax(x) - np.nanmin(x)) if np.nanmax(x) != np.nanmin(x) else x
+norm_values = [0.5 if np.isnan(v) else v for v in radar_values]
+angles = np.linspace(0, 2 * np.pi, len(radar_labels), endpoint=False).tolist()
+norm_values += norm_values[:1]
+angles += angles[:1]
 
-# 显示6个月价格走势
-st.subheader("\U0001F4C6 6 个月股价走势")
-hist = stock.history(period="6mo")
-if not hist.empty:
-    st.line_chart(hist["Close"])
+fig, ax = plt.subplots(figsize=(5, 5), subplot_kw=dict(polar=True))
+ax.plot(angles, norm_values, "b-", linewidth=2)
+ax.fill(angles, norm_values, "b", alpha=0.25)
+ax.set_thetagrids(np.degrees(angles[:-1]), radar_labels)
+ax.set_title("公司财务特征雷达图")
+st.pyplot(fig)
