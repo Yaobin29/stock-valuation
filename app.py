@@ -126,10 +126,10 @@ final_judge = "低估" if final_score < 0.5 else "高估"
 st.markdown(f"### 🧮 综合估值判断（50%模型 + 50%行业）：{final_judge}")
 
 # 📈 股票近60个月价格变化
-st.markdown("### 📈 股票近5年（月度）价格走势")
+st.markdown("### 📈 股票近半年（ 6月度）价格走势")
 
 try:
-    hist = yf.download(code, period="60mo", interval="1mo")
+    hist = yf.download(code, period="6mo", interval="1mo")
     price_data = hist["Close"].dropna()
     price_df = pd.DataFrame({
         "日期": price_data.index,
