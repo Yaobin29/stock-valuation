@@ -76,6 +76,7 @@ score_pb = tag(pb, avg_pb, high_good=False)
 score_roe = tag(roe, avg_roe, high_good=True)
 industry_score = (score_pe + score_pb + score_roe) / 3
 industry_judge = "低估" if industry_score >= 0.6 else "高估"
+industry_judge = "合理" if industry_score == 0.5 else industry_judge
 st.markdown(f"### 🧠 行业对比判断：{industry_judge}")
 
 # 获取情绪指标
@@ -110,18 +111,24 @@ col8.metric("📈 预测价格", f"${pred_price:.2f}" if pred_price else "N/A")
 col9.metric("🧠 技术面分析判断", tech_judge)
 
 # 情绪面分析判断
-sentiment_judge = "低估" if sentiment > 0 else "高估"
+if sentiment > 0.1:
+    sentiment_judge = "正面"
+elif sentiment < -0.1:
+    sentiment_judge = "负面"
+else:
+    sentiment_judge = "中性"
 st.markdown(f"### 💬 情绪面分析判断：{sentiment_judge}")
 
 # 综合模型判断：技术面60%，情绪面40%
 tech_score = 0 if tech_judge == "低估" else 1
-sentiment_score = 0 if sentiment_judge == "低估" else 1
+sentiment_score = 0 if sentiment_judge == "负面" else 1
 model_score = tech_score * 0.6 + sentiment_score * 0.4
 model_judge = "低估" if model_score < 0.5 else "高估"
 
 # 最终综合估值判断
 final_score = model_score * 0.5 + (0 if industry_judge == "低估" else 1) * 0.5
 final_judge = "低估" if final_score < 0.5 else "高估"
+final_judge = "合理" if final_score == 0.5 else final_judge
 st.markdown(f"### 🧮 综合估值判断（技术60% + 情绪40%）× 模型50% + 行业50% ：{final_judge}")
 
 # 股票价格走势
