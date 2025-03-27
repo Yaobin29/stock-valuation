@@ -1,18 +1,16 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-import matplotlib.pyplot as plt
 import numpy as np
 import joblib
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-import datetime
+from datetime import datetime, timedelta
 
 st.set_page_config(page_title="中英文股票估值分析平台", layout="wide")
-
-# 加载股票映射文件
 stock_map = pd.read_csv("stock_map.csv")
 stock_map["display"] = stock_map["name_cn"] + " (" + stock_map["code"] + ")"
 
+# 搜索部分
 st.title("📈 中英文股票估值分析平台")
 query = st.text_input("请输入公司名称或股票代码（支持中英文，如 苹果、NVDA、0700.HK）", "")
 matched = stock_map[stock_map["display"].str.contains(query, case=False, na=False)] if query else stock_map
@@ -21,9 +19,10 @@ selected = st.selectbox("请选择股票：", matched["display"].tolist())
 row = stock_map[stock_map["display"] == selected].iloc[0]
 code = row["code"]
 industry = row["industry"]
-
 stock = yf.Ticker(code)
 info = stock.info
+
+# 获取财务指标
 def get_metric(name):
     return info.get(name, np.nan)
 
@@ -34,12 +33,10 @@ eps = get_metric("trailingEps")
 revenue_growth = get_metric("revenueGrowth")
 gross_margin = get_metric("grossMargins")
 free_cashflow = get_metric("freeCashflow")
-market_cap = get_metric("marketCap")
 current_price = get_metric("currentPrice")
+market_cap = get_metric("marketCap")
 
 st.markdown(f"### 📌 股票：{row['name_cn']} ({code})")
-
-# 股票关键指标
 st.markdown("### 📊 股票关键指标")
 col1, col2, col3 = st.columns(3)
 col1.metric("PE (市盈率)", f"{pe:.2f}" if not np.isnan(pe) else "-")
@@ -81,7 +78,22 @@ industry_score = (score_pe + score_pb + score_roe) / 3
 industry_judge = "低估" if industry_score >= 0.6 else "高估"
 st.markdown(f"### 🧠 行业对比判断：{industry_judge}")
 
-# 模型预测（技术 + 情绪）
+# 获取情绪指标
+analyzer = SentimentIntensityAnalyzer()
+def get_sentiment_score(code):
+    try:
+        news = stock.news[:5]
+        headlines = [item["title"] for item in news]
+        if not headlines:
+            return 0.0
+        scores = [analyzer.polarity_scores(title)["compound"] for title in headlines]
+        return np.mean(scores)
+    except:
+        return 0.0
+
+sentiment = get_sentiment_score(code)
+
+# 加载模型并预测
 try:
     model = joblib.load("valuation_model.pkl")
     features = pd.DataFrame([{
@@ -92,51 +104,39 @@ try:
         "revenueGrowth": revenue_growth,
         "grossMargins": gross_margin,
         "marketCap": market_cap,
-        "freeCashflow": free_cashflow
+        "freeCashflow": free_cashflow,
+        "sentiment": sentiment
     }])
+
     pred_price = model.predict(features)[0]
-    tech_score = 0 if current_price < pred_price else 1
-    tech_judge = "低估" if tech_score == 0 else "高估"
+    tech_judge = "低估" if current_price < pred_price else "高估"
 except:
     pred_price = None
     tech_judge = "-"
-    tech_score = 0.5
 
-# 情绪分析
-try:
-    analyzer = SentimentIntensityAnalyzer()
-    news_titles = [
-        f"{row['name_en']} stock outlook uncertain amid rate hike concerns",
-        f"{row['name_en']} shares see slight gain as tech rebounds"
-    ]
-    sentiment_scores = [analyzer.polarity_scores(title)["compound"] for title in news_titles]
-    avg_sentiment = np.mean(sentiment_scores)
-    sentiment_judge = "正面" if avg_sentiment >= 0 else "负面"
-    sentiment_score = 1 if avg_sentiment >= 0 else 0
-except:
-    sentiment_score = 0.5
-    sentiment_judge = "-"
-
-# 综合模型判断：60% 技术 + 40% 情绪
-model_score = tech_score * 0.6 + sentiment_score * 0.4
-model_judge = "低估" if model_score < 0.5 else "高估"
-
-# 展示估值
+# 估值结果展示
 st.markdown("### 💲 估值结果")
 col7, col8, col9 = st.columns(3)
 col7.metric("📉 当前价格", f"${current_price:.2f}" if current_price else "-")
 col8.metric("📈 预测价格", f"${pred_price:.2f}" if pred_price else "N/A")
 col9.metric("🧠 技术面分析判断", tech_judge)
-st.metric("💬 情绪面分析判断", sentiment_judge)
-st.metric("🤖 综合模型判断", model_judge)
 
-# 综合估值判断：模型判断 + 行业判断 各 50%
-industry_score_final = 0 if industry_judge == "低估" else 1
-final_score = model_score * 0.5 + industry_score_final * 0.5
+# 情绪面分析判断
+sentiment_judge = "低估" if sentiment > 0 else "高估"
+st.markdown(f"### 💬 情绪面分析判断：{sentiment_judge}")
+
+# 综合模型判断：技术面60%，情绪面40%
+tech_score = 0 if tech_judge == "低估" else 1
+sentiment_score = 0 if sentiment_judge == "低估" else 1
+model_score = tech_score * 0.6 + sentiment_score * 0.4
+model_judge = "低估" if model_score < 0.5 else "高估"
+
+# 最终综合估值判断
+final_score = model_score * 0.5 + (0 if industry_judge == "低估" else 1) * 0.5
 final_judge = "低估" if final_score < 0.5 else "高估"
-st.markdown(f"### 🧮 综合估值判断（50%模型 + 50%行业）：{final_judge}")
+st.markdown(f"### 🧮 综合估值判断（技术60% + 情绪40%）× 模型50% + 行业50% ：{final_judge}")
 
-# 股票近6个月价格走势
+# 股票价格走势
 st.markdown("### 📈 股票近6个月价格走势")
 try:
     hist = stock.history(period="6mo", interval="1d")
