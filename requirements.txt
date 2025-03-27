@@ -8,3 +8,6 @@ xgboost
 matplotlib
 plotly
 scikit-learn
+lightgbm
+vaderSentiment
+ta
