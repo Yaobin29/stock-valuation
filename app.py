@@ -107,7 +107,7 @@ with st.container():
             "revenueGrowth": revenue_growth, "grossMargins": gross_margin,
             "marketCap": info.get("marketCap", np.nan),
             "freeCashflow": free_cashflow,
-            "sentiment": sentiment_score
+            
         }])
 
         pred_price = model.predict(features)[0]
