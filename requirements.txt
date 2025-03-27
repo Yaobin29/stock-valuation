@@ -12,3 +12,4 @@ lightgbm
 vaderSentiment
 ta
 feedparser
+newspaper3k
