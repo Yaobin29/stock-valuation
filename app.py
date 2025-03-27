@@ -111,32 +111,24 @@ with st.container():
     st.markdown("### 🤖 模型估值判断（技术 + 情绪）")
 
     # 技术面预测
-try:
-    model = joblib.load("valuation_model.pkl")
-    features = pd.DataFrame([{
-        "trailingPE": pe,
-        "priceToBook": pb,
-        "returnOnEquity": roe,
-        "trailingEps": eps,
-        "revenueGrowth": revenue_growth,
-        "grossMargins": gross_margin,
-        "marketCap": info.get("marketCap", np.nan),
-        "freeCashflow": free_cashflow
-    }])
-
-    pred_price = model.predict(features)[0]
-
-    # ±10% 区间判断
-    if current_price < pred_price * 0.9:
-        tech_judge = "低估"
-    elif current_price > pred_price * 1.1:
-        tech_judge = "高估"
-    else:
-        tech_judge = "合理"
-
-except Exception as e:
-    pred_price = None
-    tech_judge = "-"
+    try:
+        model = joblib.load("valuation_model.pkl")
+        features = pd.DataFrame([{
+            "trailingPE": pe,
+            "priceToBook": pb,
+            "returnOnEquity": roe,
+            "trailingEps": eps,
+            "revenueGrowth": revenue_growth,
+            "grossMargins": gross_margin,
+            "marketCap": market_cap,
+            "freeCashflow": free_cashflow,
+            "sentiment": 0  # placeholder
+        }])
+        pred_price = model.predict(features)[0]
+        tech_judge = "低估" if current_price < pred_price else "高估"
+    except:
+        pred_price = None
+        tech_judge = "-"
 
     col7, col8, col9 = st.columns(3)
     col7.metric("📉 当前价格", f"${current_price:.2f}" if current_price else "-")
