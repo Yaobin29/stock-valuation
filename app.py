@@ -119,7 +119,7 @@ else:
     sentiment_judge = "中性"
 st.markdown(f"### 💬 情绪面分析判断：{sentiment_judge}")
 
-# 综合模型判断（技术60% + 情绪40%）：基于情绪判断倾向
+# 模型估值判断（技术60% + 情绪40%）
 if sentiment_judge == "负面":
     model_judge = "高估"
 elif sentiment_judge == "正面":
@@ -127,9 +127,12 @@ elif sentiment_judge == "正面":
 else:
     model_judge = "合理"
 
-st.markdown(f"### 🧮 综合估值判断（技术60% + 情绪40%）：{model_judge}")
+st.divider()
+st.markdown("### 📊 模型内部估值判断（基于技术 + 情绪）")
+color_map = {"高估": "red", "合理": "orange", "低估": "green"}
+st.markdown(f"**<span style='color:{color_map[model_judge]}; font-size: 20px;'>模型判断：{model_judge}</span>**", unsafe_allow_html=True)
 
-# 最终综合估值判断：模型判断 + 行业判断 各占 50%
+# 最终估值判断（模型 × 行业）
 judge_score_map = {"低估": 0, "合理": 0.5, "高估": 1}
 model_score = judge_score_map.get(model_judge, 0.5)
 industry_score_final = judge_score_map.get(industry_judge, 0.5)
@@ -142,7 +145,9 @@ elif final_score > 0.5:
 else:
     final_judge = "合理"
 
-st.markdown(f"### 🧮 最终综合估值判断（模型50% + 行业50%）：{final_judge}")
+st.divider()
+st.markdown("### 🧮 最终综合估值判断（模型 × 行业）")
+st.markdown(f"**<span style='color:{color_map[final_judge]}; font-size: 24px;'>最终判断：{final_judge}</span>**", unsafe_allow_html=True)
 
 # 股票价格走势
 st.markdown("### 📈 股票近6个月价格走势")
