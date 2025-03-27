@@ -1,61 +1,53 @@
 import feedparser
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime, timedelta
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-import numpy as np
+from datetime import datetime, timedelta
+import urllib.parse
 
 analyzer = SentimentIntensityAnalyzer()
 
-def clean_html(html):
-    soup = BeautifulSoup(html, 'html.parser')
-    for tag in soup(['script', 'style']):
-        tag.decompose()
-    return ' '.join(soup.stripped_strings)
+def fetch_google_news_rss(query):
+    if not query.strip():
+        return []
 
-def fetch_google_news_rss(query, max_articles=5):
-    """
-    从 Google News RSS 抓取最近一周的新闻条目。
-    """
-    url = f"https://news.google.com/rss/search?q={query}+when:7d&hl=en-US&gl=US&ceid=US:en"
+    query_encoded = urllib.parse.quote_plus(query)
+    url = f"https://news.google.com/rss/search?q={query_encoded}+stock&hl=en-US&gl=US&ceid=US:en"
     feed = feedparser.parse(url)
-    articles = []
-
-    for entry in feed.entries[:max_articles]:
-        published = datetime(*entry.published_parsed[:6])
-        if (datetime.now() - published).days > 7:
-            continue
-        articles.append(entry.link)
-
-    return articles
+    return feed.entries[:10]
 
 def extract_article_text(url):
-    """
-    从新闻网页中提取正文内容。
-    """
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
-        response = requests.get(url, headers=headers, timeout=5)
-        if response.status_code != 200:
-            return ""
-        return clean_html(response.text)
+        resp = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(resp.content, "html.parser")
+        paragraphs = soup.find_all('p')
+        text = " ".join([p.get_text() for p in paragraphs])
+        return text
     except:
         return ""
 
+def analyze_sentiment(text):
+    if not text.strip():
+        return 0.0
+    score = analyzer.polarity_scores(text)["compound"]
+    return score
+
 def fetch_news_sentiment(query):
-    """
-    主函数：根据公司英文名抓取新闻并计算平均情绪分数。
-    """
     articles = fetch_google_news_rss(query)
     scores = []
+    cutoff_date = datetime.utcnow() - timedelta(days=7)
 
-    for url in articles:
-        text = extract_article_text(url)
-        if text and len(text) > 300:  # 太短的不分析
-            score = analyzer.polarity_scores(text)["compound"]
+    for entry in articles:
+        try:
+            pub_date = datetime(*entry.published_parsed[:6])
+            if pub_date < cutoff_date:
+                continue
+            url = entry.link
+            content = extract_article_text(url)
+            score = analyze_sentiment(content)
             scores.append(score)
+        except:
+            continue
 
-    if not scores:
-        return 0.0  # 默认中性
-
-    return np.mean(scores)
+    return sum(scores) / len(scores) if scores else 0.0
