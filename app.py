@@ -153,7 +153,7 @@ with st.container():
         model_judge = "低估"
     else:
         model_judge = "合理"
-    st.markdown(f"**📊 模型判断（基于技术+情绪）：<span class='judge {color_map[model_judge]}'>{model_judge}</span>**", unsafe_allow_html=True)
+    st.markdown(f"*📊 模型判断（基于技术+情绪）：<span class='judge {color_map[model_judge]}'>{model_judge}</span>*", unsafe_allow_html=True)
 
 # 最终综合判断
 st.markdown("---")
