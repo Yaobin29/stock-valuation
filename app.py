@@ -7,11 +7,24 @@ from sentiment_utils import fetch_news_sentiment_rss
 from datetime import datetime, timedelta
 
 st.set_page_config(page_title="中英文股票估值分析平台", layout="wide")
+st.markdown("""
+<style>
+    .highlight-box {
+        padding: 0.5em 1em;
+        border-radius: 10px;
+        font-weight: bold;
+        display: inline-block;
+    }
+    .low { background-color: #d4edda; color: #155724; }
+    .fair { background-color: #fff3cd; color: #856404; }
+    .high { background-color: #f8d7da; color: #721c24; }
+</style>
+""", unsafe_allow_html=True)
+
 stock_map = pd.read_csv("stock_map.csv")
 stock_map["display"] = stock_map["name_cn"] + " (" + stock_map["code"] + ")"
 
-# 搜索部分
-st.title("📈 中英文股票估值分析平台")
+st.markdown("# 📈 中英文股票估值分析平台")
 query = st.text_input("请输入公司名称或股票代码（支持中英文，如 苹果、NVDA、0700.HK）", "")
 matched = stock_map[stock_map["display"].str.contains(query, case=False, na=False)] if query else stock_map
 selected = st.selectbox("请选择股票：", matched["display"].tolist())
@@ -36,7 +49,9 @@ free_cashflow = get_metric("freeCashflow")
 current_price = get_metric("currentPrice")
 market_cap = get_metric("marketCap")
 
-st.markdown(f"### 📌 股票：{row['name_cn']} ({code})")
+st.divider()
+st.markdown(f"## 📝 股票：{row['name_cn']} ({code})")
+
 st.markdown("### 📊 股票关键指标")
 col1, col2, col3 = st.columns(3)
 col1.metric("PE (市盈率)", f"{pe:.2f}" if not np.isnan(pe) else "-")
@@ -77,7 +92,7 @@ score_roe = tag(roe, avg_roe, high_good=True)
 industry_score = (score_pe + score_pb + score_roe) / 3
 industry_judge = "低估" if industry_score >= 0.6 else "高估"
 industry_judge = "合理" if industry_score == 0.5 else industry_judge
-st.markdown(f"### 🧠 行业对比判断：{industry_judge}")
+st.markdown(f"### 🧠 行业对比判断：<span class='highlight-box {industry_judge}'>行业判断：{industry_judge}</span>", unsafe_allow_html=True)
 
 # 获取情绪指标
 sentiment = fetch_news_sentiment_rss(code)
@@ -103,7 +118,6 @@ except:
     pred_price = None
     tech_judge = "-"
 
-# 估值结果展示
 st.markdown("### 💲 估值结果")
 col7, col8, col9 = st.columns(3)
 col7.metric("📉 当前价格", f"${current_price:.2f}" if current_price else "-")
@@ -117,7 +131,7 @@ elif sentiment < -0.1:
     sentiment_judge = "负面"
 else:
     sentiment_judge = "中性"
-st.markdown(f"### 💬 情绪面分析判断：{sentiment_judge}")
+st.markdown(f"### 💬 情绪面分析判断：<span class='highlight-box fair'>情绪判断：{sentiment_judge}</span>", unsafe_allow_html=True)
 
 # 模型估值判断（技术60% + 情绪40%）
 if sentiment_judge == "负面":
@@ -129,8 +143,8 @@ else:
 
 st.divider()
 st.markdown("### 📊 模型内部估值判断（基于技术 + 情绪）")
-color_map = {"高估": "red", "合理": "orange", "低估": "green"}
-st.markdown(f"**<span style='color:{color_map[model_judge]}; font-size: 20px;'>模型判断：{model_judge}</span>**", unsafe_allow_html=True)
+color_map = {"高估": "high", "合理": "fair", "低估": "low"}
+st.markdown(f"<span class='highlight-box {color_map[model_judge]}'>模型判断：{model_judge}</span>", unsafe_allow_html=True)
 
 # 最终估值判断（模型 × 行业）
 judge_score_map = {"低估": 0, "合理": 0.5, "高估": 1}
@@ -147,10 +161,11 @@ else:
 
 st.divider()
 st.markdown("### 🧮 最终综合估值判断（模型 × 行业）")
-st.markdown(f"**<span style='color:{color_map[final_judge]}; font-size: 24px;'>最终判断：{final_judge}</span>**", unsafe_allow_html=True)
+st.markdown(f"<span class='highlight-box {color_map[final_judge]}' style='font-size: 24px;'>最终判断：{final_judge}</span>", unsafe_allow_html=True)
 
 # 股票价格走势
-st.markdown("### 📈 股票近6个月价格走势")
+st.divider()
+st.markdown("### 📉 股票近6个月价格走势")
 try:
     hist = stock.history(period="6mo", interval="1d")
     if hist.empty or "Close" not in hist.columns:
