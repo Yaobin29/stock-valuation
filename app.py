@@ -34,7 +34,7 @@ st.markdown("""
 stock_map = pd.read_csv("stock_map.csv")
 stock_map["display"] = stock_map["name_cn"] + " (" + stock_map["code"] + ")"
 
-st.markdown("# 📈 中英文股票估值分析平台")
+st.markdown("# 📈 W股票估值分析平台")
 query = st.text_input("请输入公司名称或股票代码（支持中英文，如 苹果、NVDA、0700.HK）", "")
 matched = stock_map[stock_map["display"].str.contains(query, case=False, na=False)] if query else stock_map
 selected = st.selectbox("请选择股票：", matched["display"].tolist())
@@ -104,7 +104,7 @@ with st.container():
     industry_judge = "低估" if industry_score >= 0.6 else "高估"
     industry_judge = "合理" if industry_score == 0.5 else industry_judge
     color_map = {"低估": "low", "合理": "fair", "高估": "high"}
-    st.markdown(f"**行业判断：<span class='judge {color_map[industry_judge]}'>{industry_judge}</span>**", unsafe_allow_html=True)
+    st.markdown("#### 行业判断：<span class='judge {color_map[industry_judge]}'>{industry_judge}</span>", unsafe_allow_html=True)
 
 # 模型判断模块
 st.markdown("---")
@@ -153,7 +153,7 @@ with st.container():
         model_judge = "低估"
     else:
         model_judge = "合理"
-    st.markdown(f"*📊 模型判断（基于技术+情绪）：<span class='judge {color_map[model_judge]}'>{model_judge}</span>*", unsafe_allow_html=True)
+    st.markdown("#### 📊 模型判断（基于技术+情绪）：<span class='judge {color_map[model_judge]}'>{model_judge}</span>", unsafe_allow_html=True)
 
 # 最终综合判断
 st.markdown("---")
@@ -167,7 +167,7 @@ with st.container():
         final_judge = "高估"
     else:
         final_judge = "合理"
-    st.markdown(f"**最终判断：<span class='judge {color_map[final_judge]}' style='font-size: 24px'>{final_judge}</span>**", unsafe_allow_html=True)
+    st.markdown("####最终判断：<span class='judge {color_map[final_judge]}' style='font-size: 24px'>{final_judge}</span>", unsafe_allow_html=True)
 
 # 走势图
 st.markdown("---")
