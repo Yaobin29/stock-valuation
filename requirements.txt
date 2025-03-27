@@ -11,3 +11,4 @@ scikit-learn
 lightgbm
 vaderSentiment
 ta
+feedparser
