@@ -64,6 +64,7 @@ with st.container():
     st.markdown(f"## 📝 股票：{row['name_cn']} ({code})")
 
 # 股票关键指标
+st.markdown("---")
 with st.container():
     st.markdown("### 📊 股票关键指标")
     col1, col2, col3 = st.columns(3)
@@ -107,6 +108,7 @@ with st.container():
     st.markdown(f"**行业判断：<span class='judge {color_map[industry_judge]}'>{industry_judge}</span>**", unsafe_allow_html=True)
 
 # 模型判断模块
+st.markdown("---")
 with st.container():
     st.markdown("### 🤖 模型估值判断（技术 + 情绪）")
 
@@ -155,6 +157,7 @@ with st.container():
     st.markdown(f"**📊 模型判断（基于技术+情绪）：<span class='judge {color_map[model_judge]}'>{model_judge}</span>**", unsafe_allow_html=True)
 
 # 最终综合判断
+st.markdown("---")
 with st.container():
     st.markdown("### 🧮 最终估值判断（模型 × 行业）")
     score_map = {"低估": 0, "合理": 0.5, "高估": 1}
@@ -168,6 +171,7 @@ with st.container():
     st.markdown(f"**最终判断：<span class='judge {color_map[final_judge]}' style='font-size: 24px'>{final_judge}</span>**", unsafe_allow_html=True)
 
 # 走势图
+st.markdown("---")
 with st.container():
     st.markdown("### 📉 股票近6个月价格走势")
     try:
