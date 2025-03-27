@@ -111,7 +111,7 @@ with st.container():
     st.markdown("### 🤖 模型估值判断（技术 + 情绪）")
 
     # 技术面预测
-   try:
+try:
     model = joblib.load("valuation_model.pkl")
     features = pd.DataFrame([{
         "trailingPE": pe,
