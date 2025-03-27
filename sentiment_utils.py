@@ -1,4 +1,5 @@
 import feedparser
+import trafilatura
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 analyzer = SentimentIntensityAnalyzer()
