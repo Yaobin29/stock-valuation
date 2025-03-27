@@ -1,51 +1,31 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
+import matplotlib.pyplot as plt
 import numpy as np
 import joblib
-from sentiment_utils import fetch_news_sentiment_rss
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from datetime import datetime, timedelta
 
 st.set_page_config(page_title="中英文股票估值分析平台", layout="wide")
 
-# 自定义样式（卡片式 + 判断颜色）
-st.markdown("""
-<style>
-.card {
-    background-color: #f9f9f9;
-    padding: 1.5em;
-    margin-bottom: 1em;
-    border-radius: 15px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
-}
-.judge {
-    font-weight: bold;
-    padding: 0.3em 0.8em;
-    border-radius: 10px;
-    display: inline-block;
-    font-size: 1.2em;
-}
-.low { background-color: #d4edda; color: #155724; }
-.fair { background-color: #fff3cd; color: #856404; }
-.high { background-color: #f8d7da; color: #721c24; }
-</style>
-""", unsafe_allow_html=True)
+# 页面标题
+st.title("📈 中英文股票估值分析平台")
+query = st.text_input("请输入公司名称或股票代码（支持中英文，如 苹果、NVDA、0700.HK）", "")
 
+# 读取股票映射文件
 stock_map = pd.read_csv("stock_map.csv")
 stock_map["display"] = stock_map["name_cn"] + " (" + stock_map["code"] + ")"
-
-st.markdown("# 📈 中英文股票估值分析平台")
-query = st.text_input("请输入公司名称或股票代码（支持中英文，如 苹果、NVDA、0700.HK）", "")
 matched = stock_map[stock_map["display"].str.contains(query, case=False, na=False)] if query else stock_map
 selected = st.selectbox("请选择股票：", matched["display"].tolist())
 
 row = stock_map[stock_map["display"] == selected].iloc[0]
 code = row["code"]
 industry = row["industry"]
+
 stock = yf.Ticker(code)
 info = stock.info
 
-# 获取财务指标
 def get_metric(name):
     return info.get(name, np.nan)
 
@@ -57,25 +37,25 @@ revenue_growth = get_metric("revenueGrowth")
 gross_margin = get_metric("grossMargins")
 free_cashflow = get_metric("freeCashflow")
 current_price = get_metric("currentPrice")
-market_cap = get_metric("marketCap")
 
-# 股票信息
-with st.container():
-    st.markdown(f"## 📝 股票：{row['name_cn']} ({code})")
+# 📌 股票标题
+st.markdown("---")
+st.markdown(f"### 🧾 股票：{row['name_cn']} ({code})")
 
-# 股票关键指标
+# 📊 股票关键指标
 with st.container():
-    st.markdown("### 📊 股票关键指标")
+    st.markdown("#### 📊 股票关键指标")
     col1, col2, col3 = st.columns(3)
     col1.metric("PE (市盈率)", f"{pe:.2f}" if not np.isnan(pe) else "-")
     col2.metric("PB (市净率)", f"{pb:.2f}" if not np.isnan(pb) else "-")
     col3.metric("ROE (%)", f"{roe*100:.2f}%" if not np.isnan(roe) else "-")
 
-# 行业判断
+# 🏭 行业估值判断
+st.markdown("---")
 with st.container():
-    st.markdown("### 🏭 行业估值判断")
-    industry_pe, industry_pb, industry_roe = [], [], []
+    st.markdown(f"#### 🏭 所属行业平均指标：{industry}")
     industry_stocks = stock_map[stock_map["industry"] == industry]["code"].tolist()
+    industry_pe, industry_pb, industry_roe = [], [], []
     for ticker in industry_stocks:
         try:
             data = yf.Ticker(ticker).info
@@ -94,7 +74,8 @@ with st.container():
     col6.metric("行业平均ROE", f"{avg_roe*100:.2f}%" if not np.isnan(avg_roe) else "-")
 
     def tag(val, avg, high_good=True):
-        if np.isnan(val) or np.isnan(avg): return 0.5
+        if np.isnan(val) or np.isnan(avg):
+            return 0.5
         return 1 if (val > avg if high_good else val < avg) else 0
 
     score_pe = tag(pe, avg_pe, False)
@@ -102,74 +83,67 @@ with st.container():
     score_roe = tag(roe, avg_roe, True)
     industry_score = (score_pe + score_pb + score_roe) / 3
     industry_judge = "低估" if industry_score >= 0.6 else "高估"
-    industry_judge = "合理" if industry_score == 0.5 else industry_judge
-    color_map = {"低估": "low", "合理": "fair", "高估": "high"}
-    st.markdown(f"**行业判断：<span class='judge {color_map[industry_judge]}'>{industry_judge}</span>**", unsafe_allow_html=True)
+    color_tag = "🟩" if industry_judge == "低估" else "🟥"
+    st.subheader(f"📌 行业判断结果：{color_tag} **{industry_judge}**")
 
-# 模型判断模块
+# 💡 模型估值判断
+st.markdown("---")
 with st.container():
-    st.markdown("### 🤖 模型估值判断（技术 + 情绪）")
-
-    # 技术面预测
+    st.markdown("#### 🤖 模型估值判断（技术 + 情绪）")
     try:
         model = joblib.load("valuation_model.pkl")
+        sentiment_score = 0.0
+        try:
+            analyzer = SentimentIntensityAnalyzer()
+            news = stock.news if hasattr(stock, "news") else []
+            headlines = [article["title"] for article in news if "title" in article][:5]
+            scores = [analyzer.polarity_scores(title)["compound"] for title in headlines]
+            sentiment_score = np.mean(scores) if scores else 0.0
+        except:
+            sentiment_score = 0.0
+
         features = pd.DataFrame([{
-            "trailingPE": pe,
-            "priceToBook": pb,
-            "returnOnEquity": roe,
-            "trailingEps": eps,
-            "revenueGrowth": revenue_growth,
-            "grossMargins": gross_margin,
-            "marketCap": market_cap,
+            "trailingPE": pe, "priceToBook": pb, "returnOnEquity": roe, "trailingEps": eps,
+            "revenueGrowth": revenue_growth, "grossMargins": gross_margin,
+            "marketCap": info.get("marketCap", np.nan),
             "freeCashflow": free_cashflow,
-        
+            "sentiment": sentiment_score
         }])
+
         pred_price = model.predict(features)[0]
         tech_judge = "低估" if current_price < pred_price else "高估"
+        sentiment_judge = "正面" if sentiment_score > 0 else "负面"
+        tech_score = 0 if tech_judge == "低估" else 1
+        senti_score = 0 if sentiment_score < 0 else 1
+        model_score = tech_score * 0.6 + senti_score * 0.4
+        model_judge = "低估" if model_score < 0.5 else "高估"
+        judge_color = "🟩" if model_judge == "低估" else "🟥"
     except:
-        pred_price = None
-        tech_judge = "-"
+        pred_price, tech_judge, sentiment_judge, model_judge = None, "-", "-", "-"
+        judge_color = "🟧"
 
     col7, col8, col9 = st.columns(3)
-    col7.metric("📉 当前价格", f"${current_price:.2f}" if current_price else "-")
-    col8.metric("📈 预测价格", f"${pred_price:.2f}" if pred_price else "N/A")
-    col9.metric("📊 技术面判断", tech_judge)
+    col7.metric("当前价格", f"${current_price:.2f}" if current_price else "-")
+    col8.metric("模型预测价格", f"${pred_price:.2f}" if pred_price else "N/A")
+    col9.metric("技术面判断", tech_judge)
 
-    # 情绪判断
-    sentiment = fetch_news_sentiment_rss(code)
-    if sentiment > 0.1:
-        sentiment_judge = "正面"
-    elif sentiment < -0.1:
-        sentiment_judge = "负面"
-    else:
-        sentiment_judge = "中性"
-    st.markdown(f"**💬 情绪面判断：<span class='judge fair'>{sentiment_judge}</span>**", unsafe_allow_html=True)
+    st.write(f"**情绪面分析结果：** {sentiment_judge}")
+    st.subheader(f"📌 模型综合判断：{judge_color} **{model_judge}**")
 
-    # 模型综合判断
-    if sentiment_judge == "负面":
-        model_judge = "高估"
-    elif sentiment_judge == "正面":
-        model_judge = "低估"
-    else:
-        model_judge = "合理"
-    st.markdown(f"**📊 模型判断（基于技术+情绪）：<span class='judge {color_map[model_judge]}'>{model_judge}</span>**", unsafe_allow_html=True)
-
-# 最终综合判断
+# 🧮 最终估值判断
+st.markdown("---")
 with st.container():
-    st.markdown("### 🧮 最终估值判断（模型 × 行业）")
-    score_map = {"低估": 0, "合理": 0.5, "高估": 1}
-    final_score = 0.5 * score_map.get(model_judge, 0.5) + 0.5 * score_map.get(industry_judge, 0.5)
-    if final_score < 0.5:
-        final_judge = "低估"
-    elif final_score > 0.5:
-        final_judge = "高估"
-    else:
-        final_judge = "合理"
-    st.markdown(f"**最终判断：<span class='judge {color_map[final_judge]}' style='font-size: 24px'>{final_judge}</span>**", unsafe_allow_html=True)
+    st.markdown("#### 🧮 最终估值判断（模型 × 行业）")
+    industry_score_final = 0 if industry_judge == "低估" else 1
+    final_score = model_score * 0.5 + industry_score_final * 0.5
+    final_judge = "低估" if final_score < 0.4 else "高估" if final_score > 0.6 else "合理"
+    final_color = {"低估": "🟩", "高估": "🟥", "合理": "🟧"}[final_judge]
+    st.subheader(f"📌 最终判断结果：{final_color} **{final_judge}**")
 
-# 走势图
+# 📈 股票价格趋势图
+st.markdown("---")
 with st.container():
-    st.markdown("### 📉 股票近6个月价格走势")
+    st.markdown("#### 📈 股票近6个月价格走势")
     try:
         hist = stock.history(period="6mo", interval="1d")
         if hist.empty or "Close" not in hist.columns:
@@ -178,4 +152,4 @@ with st.container():
         price_df = pd.DataFrame({"日期": price_data.index, "收盘价": price_data.values}).set_index("日期")
         st.line_chart(price_df)
     except Exception as e:
-        st.warning("⚠️ 无法获取历史价格数据。可能该股票无日度数据或接口异常。")
+        st.warning(f"⚠️ 无法获取历史价格数据。错误信息：{e}")
