@@ -125,7 +125,7 @@ features = pd.DataFrame([{
     "revenueGrowth": revenue_growth, "grossMargins": gross_margin,
     "marketCap": info.get("marketCap", np.nan),
     "freeCashflow": free_cashflow,
-    "sentiment": sentiment_score
+    
 }])
 
 try:
