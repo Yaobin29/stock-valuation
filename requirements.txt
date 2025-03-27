@@ -14,3 +14,4 @@ ta
 feedparser
 newspaper3k
 nltk
+trafilatura
