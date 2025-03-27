@@ -119,17 +119,23 @@ else:
     sentiment_judge = "中性"
 st.markdown(f"### 💬 情绪面分析判断：{sentiment_judge}")
 
-# 综合模型判断：技术面60%，情绪面40%
-tech_score = 0 if tech_judge == "低估" else 1
-sentiment_score = 0 if sentiment_judge == "负面" else 1
-model_score = tech_score * 0.6 + sentiment_score * 0.4
-model_judge = "低估" if model_score < 0.5 else "高估"
+# 综合估值判断（情绪驱动逻辑）
+if sentiment_judge == "负面":
+    model_judge = "高估"
+elif sentiment_judge == "正面":
+    model_judge = "低估"
+else:
+    model_judge = "合理"
 
-# 最终综合估值判断
-final_score = model_score * 0.5 + (0 if industry_judge == "低估" else 1) * 0.5
-final_judge = "低估" if final_score < 0.5 else "高估"
-final_judge = "合理" if final_score == 0.5 else final_judge
-st.markdown(f"### 🧮 综合估值判断（技术60% + 情绪40%）× 模型50% + 行业50% ：{final_judge}")
+# 最终综合估值判断：模型判断50%，行业判断50%
+if model_judge == "低估" and industry_judge == "低估":
+    final_judge = "低估"
+elif model_judge == "高估" and industry_judge == "高估":
+    final_judge = "高估"
+else:
+    final_judge = "合理"
+
+st.markdown(f"### 🧮 综合估值判断（情绪驱动逻辑 + 行业对比）：{final_judge}")
 
 # 股票价格走势
 st.markdown("### 📈 股票近6个月价格走势")
