@@ -122,7 +122,7 @@ with st.container():
             "grossMargins": gross_margin,
             "marketCap": market_cap,
             "freeCashflow": free_cashflow,
-            "sentiment": 0  # placeholder
+        
         }])
         pred_price = model.predict(features)[0]
         tech_judge = "低估" if current_price < pred_price else "高估"
