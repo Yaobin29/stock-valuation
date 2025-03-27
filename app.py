@@ -144,7 +144,7 @@ with st.container():
         sentiment_judge = "负面"
     else:
         sentiment_judge = "中性"
-    st.markdown(f"**💬 情绪面判断：<span class='judge fair'>{sentiment_judge}</span>**", unsafe_allow_html=True)
+    st.markdown(f"####* 💬 情绪面判断：<span class='judge fair'>{sentiment_judge}</span>*", unsafe_allow_html=True)
 
     # 模型综合判断
     if sentiment_judge == "负面":
@@ -167,7 +167,7 @@ with st.container():
         final_judge = "高估"
     else:
         final_judge = "合理"
-    st.markdown("####最终判断：<span class='judge {color_map[final_judge]}' style='font-size: 24px'>{final_judge}</span>", unsafe_allow_html=True)
+    st.markdown("#### 最终判断：<span class='judge {color_map[final_judge]}' style='font-size: 24px'>{final_judge}</span>", unsafe_allow_html=True)
 
 # 走势图
 st.markdown("---")
