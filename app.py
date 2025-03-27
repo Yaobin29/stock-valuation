@@ -6,7 +6,7 @@ import joblib
 from sentiment_utils import fetch_news_sentiment_rss
 from datetime import datetime, timedelta
 
-st.set_page_config(page_title="中英文股票估值分析平台", layout="wide")
+st.set_page_config(page_title="WYB股票估值分析平台", layout="wide")
 
 # 自定义样式（卡片式 + 判断颜色）
 st.markdown("""
