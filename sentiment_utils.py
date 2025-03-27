@@ -1,49 +1,38 @@
-import nltk
-nltk.download('punkt')
-
-from newspaper import Article
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-from datetime import datetime, timedelta
 import feedparser
+import trafilatura
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 analyzer = SentimentIntensityAnalyzer()
 
-def fetch_google_news_rss(query):
-    query_encoded = query.replace(" ", "+")
-    url = f"https://news.google.com/rss/search?q={query_encoded}+when:7d&hl=en-US&gl=US&ceid=US:en"
-    feed = feedparser.parse(url)
-    return feed.entries[:5]  # 取前 5 条新闻
+def fetch_news_sentiment(keyword: str) -> float:
+    """
+    使用 Google News RSS 搜索最近一周新闻，抓取正文进行情绪分析
+    :param keyword: 英文关键词（如 'Apple'）
+    :return: 平均 compound 情绪得分（正面为正值，负面为负值）
+    """
+    try:
+        # 构建 RSS URL（最近一周，英文新闻）
+        url = f"https://news.google.com/rss/search?q={keyword}+when:7d&hl=en-US&gl=US&ceid=US:en"
+        feed = feedparser.parse(url)
+        entries = feed.entries[:5]  # 最多取 5 篇新闻
 
-def fetch_news_sentiment(query):
-    entries = fetch_google_news_rss(query)
-    if not entries:
-        return "中性"
+        texts = []
+        for entry in entries:
+            article_url = entry.link
+            downloaded = trafilatura.fetch_url(article_url)
+            if downloaded:
+                extracted = trafilatura.extract(downloaded, include_comments=False, include_tables=False)
+                if extracted and len(extracted) > 200:  # 排除超短无效正文
+                    texts.append(extracted)
 
-    scores = []
+        if not texts:
+            return 0.0  # 无有效内容，视为中性
 
-    for entry in entries:
-        try:
-            article = Article(entry.link)
-            article.download()
-            article.parse()
-            text = article.text
-            if not text.strip():
-                continue
+        # 情绪分析
+        scores = [analyzer.polarity_scores(text)["compound"] for text in texts]
+        avg_score = sum(scores) / len(scores)
+        return avg_score
 
-            score = analyzer.polarity_scores(text)["compound"]
-            scores.append(score)
-        except Exception as e:
-            print(f"❌ Failed to process article: {e}")
-            continue
-
-    if not scores:
-        return "中性"
-
-    avg_score = sum(scores) / len(scores)
-
-    if avg_score > 0.2:
-        return "正面"
-    elif avg_score < -0.2:
-        return "负面"
-    else:
-        return "中性"
+    except Exception as e:
+        print(f"❌ Error in fetch_news_sentiment: {e}")
+        return 0.0
