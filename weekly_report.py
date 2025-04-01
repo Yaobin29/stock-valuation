@@ -10,7 +10,7 @@ from sentiment_utils import fetch_news_sentiment_rss
 
 # 邮箱配置（需通过 GitHub Secret 注入）
 SENDER_EMAIL = os.getenv("ybwu29@gmail.com")
-APP_PASSWORD = os.getenv("xhfqycxveeukjyga")
+APP_PASSWORD = os.getenv("zsqxqoairqeeiakh")
 RECEIVER_EMAILS = [
     "wuyaobin89@gmail.com",
     "wangling0607@gmail.com",
