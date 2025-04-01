@@ -1,49 +1,64 @@
 import os
 import pandas as pd
-import smtplib
+import yfinance as yf
+import numpy as np
 import joblib
+import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from valuation_utils import evaluate_stock  # 🔁 调用统一估值逻辑
-import warnings
-warnings.filterwarnings("ignore")
+from sentiment_utils import fetch_news_sentiment_rss
+from valuation_utils import evaluate_stock
 
-# 邮箱配置（从 GitHub Secrets 注入）
+# 邮箱配置（来自 GitHub Secrets）
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 RECEIVER_EMAILS = [
     "wuyaobin89@gmail.com",
-   
+    "wangling0607@gmail.com",
+    "jakingtang1993@gmail.com"
 ]
 
-# 加载股票列表
+# 加载股票列表与模型
 stock_map = pd.read_csv("stock_map.csv")
+model = joblib.load("valuation_model.pkl")
 
-# 扫描所有股票，评估并筛选“最终判断为低估”
-low_estimates = []
+# 三类结果容器
+low_list, fair_list, high_list = [], [], []
+
+# 遍历所有股票
 for _, row in stock_map.iterrows():
-    result = evaluate_stock(row, stock_map)
-    if result and result["最终判断"] == "低估":
-        low_estimates.append(result)
+    result = evaluate_stock(row, stock_map, model)
+    if result:
+        judge = result["最终判断"]
+        if judge == "低估":
+            low_list.append(result)
+        elif judge == "合理":
+            fair_list.append(result)
+        elif judge == "高估":
+            high_list.append(result)
 
-# 构建邮件内容
-html = "<h2>📉 每周低估股票清单</h2>"
-if low_estimates:
-    df = pd.DataFrame(low_estimates)
-    html += df.to_html(index=False, escape=False)
-else:
-    html += "<p>本周暂无符合条件的低估股票。</p>"
+# 构建 HTML 邮件内容
+html = "<h2>📊 每周估值判断报告</h2>"
 
-# 邮件组装
+def df_to_html(title, data, emoji):
+    if not data:
+        return f"<h3>{emoji} {title}</h3><p>无符合条件的股票。</p>"
+    df = pd.DataFrame(data)
+    return f"<h3>{emoji} {title}</h3>" + df.to_html(index=False, escape=False)
+
+html += df_to_html("📉 低估股票", low_list, "🟩")
+html += df_to_html("⚖️ 合理股票", fair_list, "🟨")
+html += df_to_html("📈 高估股票", high_list, "🟥")
+
+# 发送邮件
 msg = MIMEMultipart("alternative")
-msg["Subject"] = "📉 每周低估股票提醒"
+msg["Subject"] = "📬 每周股票估值判断报告"
 msg["From"] = SENDER_EMAIL
 msg["To"] = ", ".join(RECEIVER_EMAILS)
 msg.attach(MIMEText(html, "html"))
 
-# 发送邮件
 with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
     server.login(SENDER_EMAIL, APP_PASSWORD)
     server.sendmail(SENDER_EMAIL, RECEIVER_EMAILS, msg.as_string())
 
-print("✅ 邮件发送成功！")
+print("✅ 每周估值报告邮件已发送！")
