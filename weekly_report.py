@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -8,9 +9,10 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # 邮件配置（⚠️ 后续改为 GitHub Secret）
-SENDER_EMAIL = "your_email@gmail.com"
-APP_PASSWORD = "your_app_password"
-RECEIVER_EMAIL = "your_email@gmail.com"
+SENDER_EMAIL = os.getenv("ybwu29@gmail.com")
+APP_PASSWORD = os.getenv("xhfq ycxv eeuk jyga")
+RECEIVER_EMAIL = "wuyaobin89@gmail.com"
+RECEIVER_EMAIL = "wangling0607@gmail.com"
 
 # 加载模型与股票映射
 model = joblib.load("valuation_model.pkl")
