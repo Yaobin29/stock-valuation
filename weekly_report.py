@@ -1,103 +1,63 @@
 import os
 import pandas as pd
-import numpy as np
 import yfinance as yf
+import numpy as np
 import joblib
-from sentiment_utils import fetch_news_sentiment_rss
 import smtplib
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from sentiment_utils import fetch_news_sentiment_rss
 
-# 邮件配置（⚠️ 后续改为 GitHub Secret）
+# 邮箱配置（需通过 GitHub Secret 注入）
 SENDER_EMAIL = os.getenv("ybwu29@gmail.com")
 APP_PASSWORD = os.getenv("xhfq ycxv eeuk jyga")
-RECEIVER_EMAIL = "wuyaobin89@gmail.com"
-RECEIVER_EMAIL = "wangling0607@gmail.com"
+RECEIVER_EMAILS = [
+    "wuyaobin89@gmail.com",
+    "wangling0607@gmail.com",
+    "jakingtang1993@gmail.com"
+]
 
-# 加载模型与股票映射
-model = joblib.load("valuation_model.pkl")
+# 加载数据与模型
 stock_map = pd.read_csv("stock_map.csv")
+model = joblib.load("valuation_model.pkl")
 
-# 最终结果列表
-results = []
+# 工具函数：财务数据提取
+def get_metrics(info):
+    return {
+        "trailingPE": info.get("trailingPE", np.nan),
+        "priceToBook": info.get("priceToBook", np.nan),
+        "returnOnEquity": info.get("returnOnEquity", np.nan),
+        "trailingEps": info.get("trailingEps", np.nan),
+        "revenueGrowth": info.get("revenueGrowth", np.nan),
+        "grossMargins": info.get("grossMargins", np.nan),
+        "marketCap": info.get("marketCap", np.nan),
+        "freeCashflow": info.get("freeCashflow", np.nan),
+    }
 
-for _, row in stock_map.iterrows():
-    code = row["code"]
-    name_cn = row["name_cn"]
-    name_en = row["name_en"]
-    industry = row["industry"]
-
+# 综合估值判断逻辑
+def evaluate(row):
     try:
-        stock = yf.Ticker(code)
+        stock = yf.Ticker(row["code"])
         info = stock.info
+        current_price = info.get("currentPrice", None)
+        if current_price is None:
+            return None
 
-        # 获取财务指标
-        def get_metric(name): return info.get(name, np.nan)
-        pe = get_metric("trailingPE")
-        pb = get_metric("priceToBook")
-        roe = get_metric("returnOnEquity")
-        eps = get_metric("trailingEps")
-        revenue_growth = get_metric("revenueGrowth")
-        gross_margin = get_metric("grossMargins")
-        free_cashflow = get_metric("freeCashflow")
-        market_cap = get_metric("marketCap")
-        current_price = get_metric("currentPrice")
+        sentiment = fetch_news_sentiment_rss(row["code"])
+        sentiment_judge = (
+            "正面" if sentiment > 0.1 else
+            "负面" if sentiment < -0.1 else
+            "中性"
+        )
+        metrics = get_metrics(info)
+        if any(pd.isna(v) for v in metrics.values()):
+            return None
 
-        # 行业判断（PE+PB+ROE）
-        industry_pe, industry_pb, industry_roe = [], [], []
-        industry_stocks = stock_map[stock_map["industry"] == industry]["code"].tolist()
-        for ticker in industry_stocks:
-            try:
-                ind_info = yf.Ticker(ticker).info
-                industry_pe.append(ind_info.get("trailingPE", np.nan))
-                industry_pb.append(ind_info.get("priceToBook", np.nan))
-                industry_roe.append(ind_info.get("returnOnEquity", np.nan))
-            except:
-                continue
-        avg_pe = np.nanmean(industry_pe)
-        avg_pb = np.nanmean(industry_pb)
-        avg_roe = np.nanmean(industry_roe)
-
-        def tag(val, avg, high_good=True):
-            if np.isnan(val) or np.isnan(avg): return 0.5
-            return 1 if (val > avg if high_good else val < avg) else 0
-
-        score_pe = tag(pe, avg_pe, False)
-        score_pb = tag(pb, avg_pb, False)
-        score_roe = tag(roe, avg_roe, True)
-        industry_score = (score_pe + score_pb + score_roe) / 3
-        if industry_score >= 0.6:
-            industry_judge = "低估"
-        elif industry_score <= 0.3:
-            industry_judge = "高估"
-        else:
-            industry_judge = "合理"
-
-        # 情绪判断
-        sentiment = fetch_news_sentiment_rss(name_en)
-        if sentiment > 0.1:
-            sentiment_judge = "正面"
-        elif sentiment < -0.1:
-            sentiment_judge = "负面"
-        else:
-            sentiment_judge = "中性"
-
-        # 技术面预测
-        features = pd.DataFrame([{
-            "trailingPE": pe,
-            "priceToBook": pb,
-            "returnOnEquity": roe,
-            "trailingEps": eps,
-            "revenueGrowth": revenue_growth,
-            "grossMargins": gross_margin,
-            "marketCap": market_cap,
-            "freeCashflow": free_cashflow,
-            "sentiment": sentiment
-        }])
-        pred_price = model.predict(features)[0]
+        features = metrics.copy()
+        features["sentiment"] = sentiment
+        pred_price = model.predict(pd.DataFrame([features]))[0]
         tech_judge = "低估" if current_price < pred_price else "高估"
 
-        # 模型判断（仅基于情绪面）
         if sentiment_judge == "负面":
             model_judge = "高估"
         elif sentiment_judge == "正面":
@@ -105,52 +65,66 @@ for _, row in stock_map.iterrows():
         else:
             model_judge = "合理"
 
-        # 综合判断（模型×行业）
+        peers = stock_map[stock_map["industry"] == row["industry"]]["code"].tolist()
+        peer_pes = []
+        for p in peers:
+            try:
+                peer_pe = yf.Ticker(p).info.get("trailingPE", np.nan)
+                if not pd.isna(peer_pe): peer_pes.append(peer_pe)
+            except:
+                continue
+        avg_pe = np.nanmean(peer_pes)
+        industry_judge = (
+            "低估" if metrics["trailingPE"] < avg_pe else "高估"
+            if not pd.isna(avg_pe) and not pd.isna(metrics["trailingPE"]) else "合理"
+        )
+
         score_map = {"低估": 0, "合理": 0.5, "高估": 1}
-        final_score = 0.5 * score_map[model_judge] + 0.5 * score_map[industry_judge]
-        if final_score < 0.5:
-            final_judge = "低估"
-        elif final_score > 0.5:
-            final_judge = "高估"
-        else:
-            final_judge = "合理"
+        model_score = score_map.get(model_judge, 0.5)
+        industry_score = score_map.get(industry_judge, 0.5)
+        final_score = 0.5 * model_score + 0.5 * industry_score
 
-        if final_judge == "低估":
-            results.append({
-                "公司": name_cn,
-                "代码": code,
-                "当前价": f"${current_price:.2f}",
-                "预测价": f"${pred_price:.2f}",
-                "技术面": tech_judge,
-                "情绪面": sentiment_judge,
-                "行业": industry_judge,
-                "最终判断": final_judge
-            })
+        final_judge = (
+            "低估" if final_score < 0.5 else
+            "高估" if final_score > 0.5 else
+            "合理"
+        )
 
+        return {
+            "股票代码": row["code"],
+            "公司名称": row["name_cn"],
+            "当前价格": f"${current_price:.2f}",
+            "预测价格": f"${pred_price:.2f}",
+            "最终判断": final_judge
+        }
     except Exception as e:
-        print(f"跳过 {code}: {e}")
-        continue
+        print(f"跳过 {row['code']}：{e}")
+        return None
 
-# 转为表格
-report_df = pd.DataFrame(results)
+# 执行全股票扫描
+results = []
+for _, row in stock_map.iterrows():
+    res = evaluate(row)
+    if res and res["最终判断"] == "低估":
+        results.append(res)
 
-# 构造邮件内容
-msg = MIMEMultipart()
-msg["From"] = SENDER_EMAIL
-msg["To"] = RECEIVER_EMAIL
-msg["Subject"] = "📬 本周低估股票报告（估值平台 1.1）"
-if report_df.empty:
-    html = "<p>本周无“低估”判断的股票。</p>"
+# 构建邮件内容
+html = "<h3>📊 每周低估股票清单</h3>"
+if results:
+    df = pd.DataFrame(results)
+    html += df.to_html(index=False, escape=False)
 else:
-    html = report_df.to_html(index=False)
-
-msg.attach(MIMEText(f"<h3>以下为您关注的股票中综合判断为“低估”的列表：</h3>{html}", "html"))
+    html += "<p>本周暂无符合条件的低估股票。</p>"
 
 # 发送邮件
-try:
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(SENDER_EMAIL, APP_PASSWORD)
-        server.send_message(msg)
-    print("✅ 邮件已发送！")
-except Exception as e:
-    print(f"❌ 邮件发送失败: {e}")
+msg = MIMEMultipart("alternative")
+msg["Subject"] = "📉 每周低估股票提醒"
+msg["From"] = SENDER_EMAIL
+msg["To"] = ", ".join(RECEIVER_EMAILS)
+msg.attach(MIMEText(html, "html"))
+
+with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+    server.login(SENDER_EMAIL, APP_PASSWORD)
+    server.sendmail(SENDER_EMAIL, RECEIVER_EMAILS, msg.as_string())
+
+print("✅ 邮件发送成功！")
