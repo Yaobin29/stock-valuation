@@ -34,7 +34,7 @@ st.markdown("""
 stock_map = pd.read_csv("stock_map.csv")
 stock_map["display"] = stock_map["name_cn"] + " (" + stock_map["code"] + ")"
 
-st.markdown("# 📈 WYB股票估值分析平台1.0")
+st.markdown("# 📈 WYB股票估值分析平台1.1")
 query = st.text_input("请输入公司名称或股票代码（支持中英文，如 苹果、NVDA、0700.HK）", "")
 matched = stock_map[stock_map["display"].str.contains(query, case=False, na=False)] if query else stock_map
 selected = st.selectbox("请选择股票：", matched["display"].tolist())
