@@ -2,29 +2,28 @@ name: Weekly Report
 
 on:
   schedule:
-    - cron: '0 10 * * 6'  # 每周六 10:00 UTC，即中国时间周六 18:00
-  workflow_dispatch:
+    - cron: '0 10 * * 6'  # 每周六 10:00 UTC，即北京时间周六 18:00
+  workflow_dispatch:  # 允许手动运行
 
 jobs:
   report:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+    - name: Checkout repo
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install yfinance joblib xgboost scikit-learn feedparser trafilatura vaderSentiment
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
 
-      - name: Run weekly report
-        env:
-          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
-          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
-        run: python weekly_report.py
+    - name: Run weekly report
+      env:
+        SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+        APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+      run: python weekly_report.py
