@@ -8,21 +8,23 @@ on:
 jobs:
   report:
     runs-on: ubuntu-latest
+
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    - name: Install dependencies
-      run: |
-        pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install --upgrade yfinance joblib pandas numpy scikit-learn xgboost feedparser trafilatura
 
-    - name: Run weekly report
-      env:
-        SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
-        APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
-      run: python weekly_report.py
+      - name: Run weekly report
+        env:
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+        run: python weekly_report.py
