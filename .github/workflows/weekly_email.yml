@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install --upgrade yfinance joblib pandas numpy scikit-learn xgboost feedparser trafilatura
+          pip install yfinance joblib xgboost scikit-learn feedparser trafilatura vaderSentiment
 
       - name: Run weekly report
         env:
