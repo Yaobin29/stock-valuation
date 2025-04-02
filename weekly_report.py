@@ -14,8 +14,7 @@ SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 RECEIVER_EMAILS = [
     "wuyaobin89@gmail.com",
-    "wangling0607@gmail.com",
-    "jakingtang1993@gmail.com"
+   
 ]
 
 # 加载数据
