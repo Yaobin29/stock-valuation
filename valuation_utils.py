@@ -1,59 +1,61 @@
 import numpy as np
-import pandas as pd
 import yfinance as yf
+import pandas as pd
 from sentiment_utils import fetch_news_sentiment_rss
+import joblib
 
-def get_metric(info, name):
-    return info.get(name, np.nan)
+model = joblib.load("valuation_model.pkl")
 
-def evaluate_stock(row, stock_map, model):
+def get_financial_metrics(info):
+    return {
+        "trailingPE": info.get("trailingPE", np.nan),
+        "priceToBook": info.get("priceToBook", np.nan),
+        "returnOnEquity": info.get("returnOnEquity", np.nan),
+        "trailingEps": info.get("trailingEps", np.nan),
+        "revenueGrowth": info.get("revenueGrowth", np.nan),
+        "grossMargins": info.get("grossMargins", np.nan),
+        "marketCap": info.get("marketCap", np.nan),
+        "freeCashflow": info.get("freeCashflow", np.nan),
+        "currentPrice": info.get("currentPrice", np.nan)
+    }
+
+def evaluate_stock(row, stock_map):
     try:
         code = row["code"]
         industry = row["industry"]
-        name_cn = row["name_cn"]
+        info = yf.Ticker(code).info
+        metrics = get_financial_metrics(info)
+        current_price = metrics["currentPrice"]
 
-        stock = yf.Ticker(code)
-        info = stock.info
+        if current_price is None or pd.isna(current_price):
+            return None
 
-        pe = get_metric(info, "trailingPE")
-        pb = get_metric(info, "priceToBook")
-        roe = get_metric(info, "returnOnEquity")
-        eps = get_metric(info, "trailingEps")
-        revenue_growth = get_metric(info, "revenueGrowth")
-        gross_margin = get_metric(info, "grossMargins")
-        free_cashflow = get_metric(info, "freeCashflow")
-        market_cap = get_metric(info, "marketCap")
-        current_price = get_metric(info, "currentPrice")
-
-        # 行业平均比较
-        industry_pe, industry_pb, industry_roe = [], [], []
-        industry_stocks = stock_map[stock_map["industry"] == industry]["code"].tolist()
-        for ticker in industry_stocks:
+        # 行业均值（优先顺序 PE > PB > ROE）
+        industry_codes = stock_map[stock_map["industry"] == industry]["code"]
+        industry_data = []
+        for ic in industry_codes:
             try:
-                data = yf.Ticker(ticker).info
-                industry_pe.append(data.get("trailingPE", np.nan))
-                industry_pb.append(data.get("priceToBook", np.nan))
-                industry_roe.append(data.get("returnOnEquity", np.nan))
+                i_info = yf.Ticker(ic).info
+                industry_data.append(get_financial_metrics(i_info))
             except:
                 continue
-        avg_pe = np.nanmean(industry_pe)
-        avg_pb = np.nanmean(industry_pb)
-        avg_roe = np.nanmean(industry_roe)
+        industry_df = pd.DataFrame(industry_data)
 
-        def tag(val, avg, high_good=True):
-            if np.isnan(val) or np.isnan(avg):
-                return 0.5
-            return 1 if (val > avg if high_good else val < avg) else 0
+        industry_judge = "合理"
+        if not pd.isna(metrics["trailingPE"]):
+            avg_pe = np.nanmean(industry_df["trailingPE"])
+            if not pd.isna(avg_pe):
+                industry_judge = "低估" if metrics["trailingPE"] < avg_pe else "高估"
+        elif not pd.isna(metrics["priceToBook"]):
+            avg_pb = np.nanmean(industry_df["priceToBook"])
+            if not pd.isna(avg_pb):
+                industry_judge = "低估" if metrics["priceToBook"] < avg_pb else "高估"
+        elif not pd.isna(metrics["returnOnEquity"]):
+            avg_roe = np.nanmean(industry_df["returnOnEquity"])
+            if not pd.isna(avg_roe):
+                industry_judge = "高估" if metrics["returnOnEquity"] < avg_roe else "低估"
 
-        score_pe = tag(pe, avg_pe, False)
-        score_pb = tag(pb, avg_pb, False)
-        score_roe = tag(roe, avg_roe, True)
-        industry_score = (score_pe + score_pb + score_roe) / 3
-        industry_judge = "低估" if industry_score >= 0.6 else "高估"
-        if industry_score == 0.5:
-            industry_judge = "合理"
-
-        # 模型判断
+        # 情绪面
         sentiment = fetch_news_sentiment_rss(code)
         if sentiment > 0.1:
             sentiment_judge = "正面"
@@ -62,21 +64,21 @@ def evaluate_stock(row, stock_map, model):
         else:
             sentiment_judge = "中性"
 
-        features = pd.DataFrame([{
-            "trailingPE": pe,
-            "priceToBook": pb,
-            "returnOnEquity": roe,
-            "trailingEps": eps,
-            "revenueGrowth": revenue_growth,
-            "grossMargins": gross_margin,
-            "marketCap": market_cap,
-            "freeCashflow": free_cashflow,
-            "sentiment": sentiment
-        }])
+        # 技术面估值
+        input_features = {
+            key: metrics[key] for key in [
+                "trailingPE", "priceToBook", "returnOnEquity", "trailingEps",
+                "revenueGrowth", "grossMargins", "marketCap", "freeCashflow"
+            ]
+        }
+        input_features["sentiment"] = sentiment
+        if any(pd.isna(v) for v in input_features.values()):
+            return None
 
-        pred_price = model.predict(features)[0]
+        pred_price = model.predict(pd.DataFrame([input_features]))[0]
         tech_judge = "低估" if current_price < pred_price else "高估"
 
+        # 模型判断
         if sentiment_judge == "负面":
             model_judge = "高估"
         elif sentiment_judge == "正面":
@@ -85,8 +87,8 @@ def evaluate_stock(row, stock_map, model):
             model_judge = "合理"
 
         score_map = {"低估": 0, "合理": 0.5, "高估": 1}
-        model_score = score_map.get(model_judge, 0.5)
-        industry_score = score_map.get(industry_judge, 0.5)
+        model_score = score_map[model_judge]
+        industry_score = score_map[industry_judge]
         final_score = 0.5 * model_score + 0.5 * industry_score
 
         if final_score < 0.5:
@@ -97,15 +99,12 @@ def evaluate_stock(row, stock_map, model):
             final_judge = "合理"
 
         return {
+            "公司名称": row["name_cn"],
             "股票代码": code,
-            "公司名称": name_cn,
             "当前价格": f"${current_price:.2f}",
             "预测价格": f"${pred_price:.2f}",
-            "行业判断": industry_judge,
-            "情绪判断": sentiment_judge,
-            "模型判断": model_judge,
             "最终判断": final_judge
         }
     except Exception as e:
-        print(f"❌ 评估失败 {row['code']}: {e}")
+        print(f"跳过 {row['code']}: {e}")
         return None
