@@ -5,27 +5,27 @@
     "avg_ROE": 29.37
   },
   "医药": {
-    "avg_PE": 30.63,
-    "avg_PB": 9.48,
-    "avg_ROE": 26.65
+    "avg_PE": 29.79,
+    "avg_PB": 9.22,
+    "avg_ROE": 27.05
   },
   "新能源": {
     "avg_PE": 18.79,
-    "avg_PB": 2.72,
-    "avg_ROE": 14.89
+    "avg_PB": 2.66,
+    "avg_ROE": 14.82
   },
   "电动汽车": {
     "avg_PE": 16.51,
-    "avg_PB": 2.46,
-    "avg_ROE": -38.7
+    "avg_PB": 1.87,
+    "avg_ROE": -38.96
   },
   "消费": {
-    "avg_PE": 25.83,
-    "avg_PB": 4.87,
-    "avg_ROE": 22.96
+    "avg_PE": 25.49,
+    "avg_PB": 5.15,
+    "avg_ROE": 24.07
   },
   "银行": {
-    "avg_PE": 36.16,
+    "avg_PE": 36.13,
     "avg_PB": 46.36,
     "avg_ROE": 120.87
   }
