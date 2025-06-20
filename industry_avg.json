@@ -1,22 +1,22 @@
 {
   "科技": {
-    "avg_PE": 69.08,
-    "avg_PB": 12.69,
-    "avg_ROE": 29.54
+    "avg_PE": 44.73,
+    "avg_PB": 9.5,
+    "avg_ROE": 31.64
   },
   "医药": {
-    "avg_PE": 22.27,
-    "avg_PB": 4.21,
-    "avg_ROE": 22.8
+    "avg_PE": 27.6,
+    "avg_PB": 4.47,
+    "avg_ROE": 18.36
   },
   "新能源": {
-    "avg_PE": 18.89,
-    "avg_PB": 2.67,
-    "avg_ROE": 16.56
+    "avg_PE": 229.11,
+    "avg_PB": 3.85,
+    "avg_ROE": 10.6
   },
   "消费": {
-    "avg_PE": 20.77,
-    "avg_PB": 4.65,
-    "avg_ROE": 23.43
+    "avg_PE": 22.46,
+    "avg_PB": 5.02,
+    "avg_ROE": 27.51
   }
 }
