@@ -1,27 +1,32 @@
 {
   "科技": {
-    "avg_PE": 47.46,
-    "avg_PB": 7.91,
-    "avg_ROE": 25.94
+    "avg_PE": 43.45,
+    "avg_PB": 11.85,
+    "avg_ROE": 33.87
   },
   "医药": {
-    "avg_PE": 20.43,
-    "avg_PB": 2.36,
-    "avg_ROE": 88.12
+    "avg_PE": 22.09,
+    "avg_PB": 4.01,
+    "avg_ROE": 31.17
   },
   "新能源": {
-    "avg_PE": 12.32,
-    "avg_PB": 1.9,
-    "avg_ROE": 16.77
+    "avg_PE": 14.0,
+    "avg_PB": 2.61,
+    "avg_ROE": 19.95
+  },
+  "电动汽车": {
+    "avg_PE": 24.54,
+    "avg_PB": 0.36,
+    "avg_ROE": 12.08
   },
   "消费": {
-    "avg_PE": 153.1,
-    "avg_PB": 6.61,
-    "avg_ROE": 28.0
+    "avg_PE": 20.73,
+    "avg_PB": 4.35,
+    "avg_ROE": 28.27
   },
   "银行": {
-    "avg_PE": 37.32,
-    "avg_PB": 72.7,
-    "avg_ROE": 187.7
+    "avg_PE": 34.03,
+    "avg_PB": 17.1,
+    "avg_ROE": 50.65
   }
 }
